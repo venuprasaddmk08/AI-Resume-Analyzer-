@@ -24,6 +24,15 @@ _STOPWORDS = {
 _TOP_N_KEYWORDS = 40
 _MAX_DIFF_ITEMS = 25
 
+_GARBLED_CHARS_RE = re.compile(r"[�\x00-\x08\x0b\x0c\x0e-\x1f]")
+_GARBLED_RATIO_THRESHOLD = 0.02
+
+_COLUMN_BUCKET_WIDTH = 60.0
+_Y_BACKWARD_TOLERANCE = 5.0
+_BACKWARD_JUMP_RATIO_THRESHOLD = 0.15
+_MIN_COLUMN_BLOCKS = 3
+_MIN_POSITIONED_BLOCKS = 4
+
 
 def _keywords(text: str) -> dict[str, int]:
     counts: dict[str, int] = {}
@@ -39,7 +48,13 @@ def _top_words(counts: dict[str, int], n: int) -> set[str]:
     return {w for w, _ in sorted(counts.items(), key=lambda kv: kv[1], reverse=True)[:n]}
 
 
-def build_ats_preview(normalized_text: str, sections: list[dict], tables: list, parse_warnings: list[str]) -> AtsParsingPreview:
+def build_ats_preview(
+    normalized_text: str,
+    sections: list[dict],
+    tables: list,
+    parse_warnings: list[str],
+    blocks: list[dict] | None = None,
+) -> AtsParsingPreview:
     headers = [s.get("section") for s in sections if s.get("section")]
     warnings = list(parse_warnings)
     if tables:
@@ -47,12 +62,85 @@ def build_ats_preview(normalized_text: str, sections: list[dict], tables: list, 
             f"This resume has {len(tables)} table(s) — many ATS parsers read tables poorly or "
             "out of order. Consider using plain text/bullets instead if possible."
         )
+
+    blocks = blocks or []
+    warnings.extend(_detect_layout_warnings(blocks))
+    warnings.extend(_detect_garbled_content(normalized_text))
+    warnings.extend(_detect_empty_sections(blocks))
+
     return AtsParsingPreview(
         normalized_text=normalized_text,
         section_headers_detected=headers,
         table_count=len(tables),
         warnings=warnings,
     )
+
+
+def _detect_layout_warnings(blocks: list[dict]) -> list[str]:
+    """Uses the bbox/page_number metadata already extracted from the PDF
+    to flag things a real ATS parser would likely stumble on — reading
+    order that jumps backward on the page, or a probable multi-column
+    layout. Only runs when there's enough positioned block data (PDFs
+    only; DOCX/TXT never populate bbox, so this is a no-op for them)."""
+    positioned = [b for b in blocks if b.get("bbox") and b.get("page_number") is not None]
+    if len(positioned) < _MIN_POSITIONED_BLOCKS:
+        return []
+
+    warnings = []
+
+    backward_jumps = 0
+    same_page_pairs = 0
+    for prev, curr in zip(positioned, positioned[1:]):
+        if prev["page_number"] != curr["page_number"]:
+            continue
+        same_page_pairs += 1
+        if curr["bbox"][1] < prev["bbox"][1] - _Y_BACKWARD_TOLERANCE:
+            backward_jumps += 1
+    if same_page_pairs > 0 and (backward_jumps / same_page_pairs) > _BACKWARD_JUMP_RATIO_THRESHOLD:
+        warnings.append(
+            f"Possible reading-order issue: the extracted text jumps backward up the page in "
+            f"{backward_jumps} of {same_page_pairs} places — often caused by a multi-column layout "
+            "that an ATS parser may read out of visual order."
+        )
+
+    buckets: dict[int, list[dict]] = {}
+    for b in positioned:
+        bucket = round(b["bbox"][0] / _COLUMN_BUCKET_WIDTH)
+        buckets.setdefault(bucket, []).append(b)
+    wide_buckets = sorted(k for k, v in buckets.items() if len(v) >= _MIN_COLUMN_BLOCKS)
+    if len(wide_buckets) >= 2 and wide_buckets[-1] - wide_buckets[0] >= 2:
+        warnings.append(
+            "Possible multi-column layout detected — text starts at multiple distinct horizontal "
+            "positions on the page. Many ATS parsers read columns out of visual order."
+        )
+
+    return warnings
+
+
+def _detect_garbled_content(normalized_text: str) -> list[str]:
+    if not normalized_text:
+        return []
+    ratio = len(_GARBLED_CHARS_RE.findall(normalized_text)) / len(normalized_text)
+    if ratio > _GARBLED_RATIO_THRESHOLD:
+        return [
+            "Possible garbled content: unusual control characters were found in the extracted text — "
+            "this can happen with unusual fonts, text embedded as images, or a corrupted file."
+        ]
+    return []
+
+
+def _detect_empty_sections(blocks: list[dict]) -> list[str]:
+    warnings = []
+    for i, block in enumerate(blocks):
+        if not block.get("is_heading"):
+            continue
+        next_block = blocks[i + 1] if i + 1 < len(blocks) else None
+        if next_block is not None and next_block.get("is_heading"):
+            heading_text = (block.get("text") or "").strip()
+            warnings.append(
+                f'Possible empty section: "{heading_text}" appears to have no body text before the next heading.'
+            )
+    return warnings
 
 
 def compute_keyword_diff(jd_text: str, resume_text: str) -> KeywordDiff:

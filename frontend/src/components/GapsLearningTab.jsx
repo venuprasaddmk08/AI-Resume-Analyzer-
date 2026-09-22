@@ -82,15 +82,22 @@ export default function GapsLearningTab({ matches, insightsStatus, insights, ins
                 <p>{step.practice_project}</p>
               </div>
 
-              {step.youtube_search_url && (
-                <a
-                  className="youtube-search-link"
-                  href={step.youtube_search_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Play size={14} /> Search YouTube for {step.skill} tutorials
-                </a>
+              {step.youtube_resources?.length > 0 && (
+                <div className="gap-section">
+                  <h4>
+                    <Play size={14} /> Video resources
+                  </h4>
+                  <ul className="youtube-resource-list">
+                    {step.youtube_resources.map((res, ri) => (
+                      <li key={ri}>
+                        <a href={res.url} target="_blank" rel="noopener noreferrer">
+                          {res.title}
+                        </a>
+                        {res.source === "search_link" && <span className="youtube-resource-tag">search link</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
             </div>
           );

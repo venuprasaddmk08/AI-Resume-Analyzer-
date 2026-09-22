@@ -1,5 +1,18 @@
-import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer, Tooltip } from "recharts";
-import { Briefcase, Loader2, TrendingUp } from "lucide-react";
+import {
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  PolarAngleAxis,
+  PolarGrid,
+  Radar,
+  RadarChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import { ArrowUpCircle, Briefcase, Loader2, TrendingUp } from "lucide-react";
+
+const PIE_COLORS = ["#1a8a5f", "#2f7fbf", "#c1602f", "#8a5cb0", "#b3402c", "#5b8a3a"];
 
 export default function CareerIntelligenceTab({ status, data, error }) {
   if (status === "loading" || status === "idle") {
@@ -17,7 +30,10 @@ export default function CareerIntelligenceTab({ status, data, error }) {
 
   const roleFit = data?.role_fit || [];
   const trajectory = data?.career_trajectory || [];
+  const nextRole = data?.next_role;
   const radarData = roleFit.map((r) => ({ role: r.role_title, fit: r.fit_score ?? 0 }));
+  const pieData = roleFit.map((r) => ({ name: r.role_title, value: r.fit_score ?? 0 }));
+  const pieHasSignal = pieData.some((d) => d.value > 0);
   const topRoles = roleFit.slice(0, 3);
 
   return (
@@ -38,15 +54,38 @@ export default function CareerIntelligenceTab({ status, data, error }) {
       <h3 className="section-title">
         <TrendingUp size={16} /> Multi-Role Fit
       </h3>
-      <div className="career-radar">
-        <ResponsiveContainer width="100%" height={320}>
-          <RadarChart data={radarData}>
-            <PolarGrid stroke="#e7e1d8" />
-            <PolarAngleAxis dataKey="role" tick={{ fontSize: 11, fill: "#5b5850" }} />
-            <Tooltip formatter={(value) => `${Math.round(value)}/100`} />
-            <Radar dataKey="fit" stroke="#1a8a5f" fill="#1a8a5f" fillOpacity={0.35} />
-          </RadarChart>
-        </ResponsiveContainer>
+      <p className="tab-intro">
+        Resume-to-role fit analysis across the profiles above — a comparison of your own evidence, not an employer
+        hiring probability.
+      </p>
+      <div className="career-charts-grid">
+        <div className="career-radar">
+          <ResponsiveContainer width="100%" height={320}>
+            <RadarChart data={radarData}>
+              <PolarGrid stroke="#e7e1d8" />
+              <PolarAngleAxis dataKey="role" tick={{ fontSize: 11, fill: "#5b5850" }} />
+              <Tooltip formatter={(value) => `${Math.round(value)}/100`} />
+              <Radar dataKey="fit" stroke="#1a8a5f" fill="#1a8a5f" fillOpacity={0.35} />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="career-pie">
+          {pieHasSignal ? (
+            <ResponsiveContainer width="100%" height={320}>
+              <PieChart>
+                <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={110} label={({ name, value }) => `${name}: ${Math.round(value)}`}>
+                  {pieData.map((entry, i) => (
+                    <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => `${Math.round(value)}/100`} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="empty-state small">Not enough evidence yet to compare fit proportionally across roles.</p>
+          )}
+        </div>
       </div>
 
       <div className="role-fit-cards">
@@ -94,6 +133,31 @@ export default function CareerIntelligenceTab({ status, data, error }) {
             </div>
           ))}
         </div>
+      )}
+
+      {nextRole && (
+        <>
+          <h3 className="section-title">
+            <ArrowUpCircle size={16} /> Suggested Next Role
+          </h3>
+          <div className="next-role-card">
+            {nextRole.suggested_next_role ? (
+              <p className="next-role-path">
+                {nextRole.current_level} <span className="next-role-arrow">→</span> {nextRole.suggested_next_role}
+              </p>
+            ) : (
+              <p className="next-role-path">{nextRole.current_level || "Not enough evidence yet"}</p>
+            )}
+            <p className="next-role-rationale">{nextRole.rationale}</p>
+            {nextRole.supporting_evidence.length > 0 && (
+              <ul className="role-fit-evidence">
+                {nextRole.supporting_evidence.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
       )}
     </div>
   );

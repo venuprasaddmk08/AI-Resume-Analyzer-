@@ -13,8 +13,10 @@
   introduce bias in human or automated screening — this is offered to
   help the candidate, and pairs with the fact that scoring_engine only
   ever scores skills/experience/education/certifications.
-- YouTube: a constructed search-results URL (real and always valid),
-  never a specific fabricated video link.
+- YouTube: when YOUTUBE_API_KEY is configured, calls the real YouTube
+  Data API for actual video titles/links. Without a key, or if the call
+  fails, falls back to a constructed search-results URL (real and always
+  valid) — never a specific fabricated video link either way.
 """
 
 import json
@@ -26,8 +28,10 @@ import httpx
 from pydantic import BaseModel
 
 from config import get_settings
-from schemas import FairnessCheck, GithubConsistency, LinkedInConsistencyResult, ResumeAnalysis
+from schemas import FairnessCheck, GithubConsistency, LinkedInConsistencyResult, ResumeAnalysis, YoutubeResource
 from services.ai_client import AIUnavailableError, UNTRUSTED_DOCUMENT_NOTICE, generate_structured
+
+_YOUTUBE_MAX_RESULTS = 3
 
 _GITHUB_URL_RE = re.compile(r"github\.com/([A-Za-z0-9-]+)", re.IGNORECASE)
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "linkedin_consistency.txt"
@@ -54,6 +58,47 @@ class _AILinkedInResult(BaseModel):
 
 def youtube_search_url(query: str) -> str:
     return f"https://www.youtube.com/results?search_query={quote_plus(query)}"
+
+
+def _youtube_fallback(query: str) -> list[YoutubeResource]:
+    return [YoutubeResource(title=f"Search YouTube for: {query}", url=youtube_search_url(query), source="search_link")]
+
+
+def get_youtube_resources(query: str) -> list[YoutubeResource]:
+    """Real videos from the YouTube Data API when a key is configured;
+    otherwise (or on any failure) a single honest search-link fallback.
+    Never invents a video title or ID."""
+    settings = get_settings()
+    if not settings.youtube_api_key:
+        return _youtube_fallback(query)
+
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            response = client.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params={
+                    "part": "snippet",
+                    "q": query,
+                    "type": "video",
+                    "maxResults": _YOUTUBE_MAX_RESULTS,
+                    "key": settings.youtube_api_key,
+                },
+            )
+            response.raise_for_status()
+            items = response.json().get("items", [])
+    except httpx.HTTPError:
+        return _youtube_fallback(query)
+
+    resources = [
+        YoutubeResource(
+            title=item["snippet"]["title"],
+            url=f"https://www.youtube.com/watch?v={item['id']['videoId']}",
+            source="youtube_api",
+        )
+        for item in items
+        if item.get("id", {}).get("videoId") and item.get("snippet", {}).get("title")
+    ]
+    return resources or _youtube_fallback(query)
 
 
 def check_github_consistency(github_url: str | None, claimed_skills: list[str]) -> GithubConsistency:

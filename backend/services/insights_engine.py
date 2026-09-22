@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from schemas import CareerInsights, InterviewQuestion, JDAnalysis, LearningStep, RequirementMatch
 from services.ai_client import AIUnavailableError, UNTRUSTED_DOCUMENT_NOTICE, generate_structured
-from services.external_evidence import youtube_search_url
+from services.external_evidence import get_youtube_resources, youtube_search_url
 
 _PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "career_insights.txt"
 
@@ -43,7 +43,9 @@ def _sort_by_priority(matches: list[RequirementMatch]) -> list[RequirementMatch]
 
 
 def _with_youtube_link(step: LearningStep) -> LearningStep:
-    step.youtube_search_url = youtube_search_url(f"{step.skill} tutorial")
+    query = f"{step.skill} tutorial"
+    step.youtube_search_url = youtube_search_url(query)
+    step.youtube_resources = get_youtube_resources(query)
     return step
 
 
@@ -149,6 +151,7 @@ def _fallback_roadmap(gap_matches: list[RequirementMatch]) -> list[LearningStep]
                 "then describe it with a concrete outcome."
             ),
             youtube_search_url=youtube_search_url(f"{m.canonical_skill} tutorial"),
+            youtube_resources=get_youtube_resources(f"{m.canonical_skill} tutorial"),
         )
         for m in gap_matches
     ]

@@ -21,7 +21,7 @@ from schemas import (
     ResumeIntelligenceResponse,
     ResumeUploadResponse,
 )
-from services.career_intelligence import build_career_trajectory, compute_role_fit
+from services.career_intelligence import build_career_trajectory, compute_role_fit, suggest_next_role
 from services.external_evidence import check_fairness, check_github_consistency, check_linkedin_consistency
 from services.resume_analyzer import analyze_resume
 from services.resume_intelligence import collect_bullets, compute_resume_health, detect_tone_seniority, rewrite_bullet
@@ -144,11 +144,13 @@ def get_career_intelligence(resume_id: int, db: Session = Depends(get_db)):
 
     role_fit = compute_role_fit(resume_analysis, resume.blocks, resume.sections)
     career_trajectory = build_career_trajectory(resume_analysis)
+    next_role = suggest_next_role(resume_analysis, role_fit)
 
     return CareerIntelligenceResponse(
         resume_id=resume.id,
         role_fit=role_fit,
         career_trajectory=career_trajectory,
+        next_role=next_role,
         warnings=warnings,
     )
 

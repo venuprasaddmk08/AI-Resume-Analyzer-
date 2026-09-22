@@ -285,6 +285,15 @@ class ScoreResponse(BaseModel):
 InterviewCategory = Literal["Technical", "Project", "Behavioral", "Gap-focused"]
 
 
+class YoutubeResource(BaseModel):
+    title: str
+    url: str
+    source: Literal["youtube_api", "search_link"] = Field(
+        description="'youtube_api' when fetched live from the YouTube Data API; 'search_link' when it's a "
+        "constructed search-results URL used as a fallback (no API key, or the call failed)."
+    )
+
+
 class LearningStep(BaseModel):
     skill: str
     priority: RequirementPriority
@@ -293,6 +302,9 @@ class LearningStep(BaseModel):
     practice_project: str
     youtube_search_url: Optional[str] = Field(
         default=None, description="A real YouTube search-results URL for this skill, not a specific fabricated video."
+    )
+    youtube_resources: List[YoutubeResource] = Field(
+        default=[], description="Real videos from the YouTube Data API when a key is configured, else a single search-link fallback."
     )
 
 
@@ -363,10 +375,19 @@ class CareerTrajectoryEntry(BaseModel):
     description: Optional[str] = None
 
 
+class NextRoleSuggestion(BaseModel):
+    current_role_family: Optional[str] = None
+    current_level: Optional[str] = None
+    suggested_next_role: Optional[str] = None
+    rationale: str
+    supporting_evidence: List[str] = []
+
+
 class CareerIntelligenceResponse(BaseModel):
     resume_id: int
     role_fit: List[RoleFitResult]
     career_trajectory: List[CareerTrajectoryEntry]
+    next_role: NextRoleSuggestion
     warnings: List[str] = []
 
 

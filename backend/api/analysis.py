@@ -219,7 +219,7 @@ def get_ats_recruiter_view(analysis_id: int, db: Session = Depends(get_db)):
     job = _get_job_or_404(analysis.job_id, db)
     resume_analysis = _ensure_resume_analyzed(resume, db)
 
-    ats_preview = build_ats_preview(resume.normalized_text, resume.sections, resume.tables, resume.warnings)
+    ats_preview = build_ats_preview(resume.normalized_text, resume.sections, resume.tables, resume.warnings, resume.blocks)
     keyword_diff = compute_keyword_diff(job.normalized_text, resume.normalized_text)
     six_second_scan = compute_six_second_scan(resume_analysis, resume.normalized_text)
 
