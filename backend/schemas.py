@@ -216,6 +216,7 @@ class AnalysisResponse(BaseModel):
     ai_refinement_used: bool
     warnings: List[str] = []
     created_at: datetime
+    score: Optional["ScoreBreakdown"] = None
 
 
 class SkillsCategorizedResponse(BaseModel):
@@ -235,6 +236,52 @@ class AIRefinementDecision(BaseModel):
     reason: str
 
 
+# ---------------------------------------------------------------------------
+# Job-fit scoring (Phase 6)
+# ---------------------------------------------------------------------------
+
+ComponentName = Literal["skills", "experience", "projects", "education", "certifications"]
+
+
+class ComponentScore(BaseModel):
+    score: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    insufficient_evidence: bool
+    detail: str
+
+
+class EvidenceSummary(BaseModel):
+    total_requirements: int
+    matched: int
+    partial: int
+    gaps: int
+    mandatory_matched: int
+    mandatory_total: int
+    preferred_matched: int
+    preferred_total: int
+    nice_to_have_matched: int
+    nice_to_have_total: int
+
+
+class ScoreBreakdown(BaseModel):
+    component_scores: dict[ComponentName, ComponentScore]
+    overall_score: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    positive_factors: List[str]
+    partial_factors: List[str]
+    negative_factors: List[str]
+    evidence_summary: EvidenceSummary
+    score_method: str
+
+
+class ScoreResponse(BaseModel):
+    analysis_id: int
+    score: ScoreBreakdown
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
+
+
+# AnalysisResponse forward-references ScoreBreakdown (defined later in this
+# file, once Phase 6 scoring was added) — rebuild it now that both exist.
+AnalysisResponse.model_rebuild()

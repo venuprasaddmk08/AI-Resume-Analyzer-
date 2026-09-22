@@ -90,6 +90,21 @@ def test_run_analyzes_and_matches(monkeypatch):
     assert evidence_response.status_code == 200
     assert len(evidence_response.json()["evidence_graph"]) == 2
 
+    score_response = client.get(f"/api/analysis/{analysis_id}/score")
+    assert score_response.status_code == 200
+    score_body = score_response.json()["score"]
+    assert score_body["overall_score"] is not None
+    assert score_body["component_scores"]["skills"]["score"] is not None
+    assert "not an official ATS score" in score_body["score_method"]
+
+    # The full analysis response also carries the score inline.
+    assert body["score"]["overall_score"] == score_body["overall_score"]
+
+
+def test_score_endpoint_returns_404_for_unknown_analysis():
+    response = client.get("/api/analysis/999999/score")
+    assert response.status_code == 404
+
 
 def test_get_analysis_returns_404_for_unknown_id():
     response = client.get("/api/analysis/999999")

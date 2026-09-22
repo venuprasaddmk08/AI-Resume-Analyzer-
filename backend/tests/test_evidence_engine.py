@@ -13,6 +13,22 @@ def _disable_semantic(monkeypatch):
     monkeypatch.setattr(evidence_engine, "semantic_model_available", lambda: False)
 
 
+def test_duplicate_skill_across_priority_tiers_is_not_double_counted(monkeypatch):
+    _disable_semantic(monkeypatch)
+    # "Python" and "python" both appear, once as required and once as
+    # preferred (e.g. a slightly inconsistent AI extraction) — it must
+    # only be scored once, keeping the higher (MANDATORY) priority.
+    jd = JDAnalysis(required_skills=["Python"], preferred_skills=["python"])
+    resume = ResumeAnalysis(
+        skills=[SkillEvidence(skill="Python", evidence_text="Built APIs in Python.", evidence_type="WORK", confidence=0.9)]
+    )
+
+    matches, _, _ = evidence_engine.build_requirement_matches(jd, resume, [], [])
+
+    assert len(matches) == 1
+    assert matches[0].priority == "MANDATORY"
+
+
 def test_exact_match_uses_ai_extracted_skill(monkeypatch):
     _disable_semantic(monkeypatch)
     jd = JDAnalysis(required_skills=["Python"])

@@ -60,7 +60,19 @@ def _requirements_from_jd(jd: JDAnalysis) -> list[tuple[str, str]]:
         requirements.append((skill, "PREFERRED"))
     for skill in jd.nice_to_have_skills:
         requirements.append((skill, "NICE_TO_HAVE"))
-    return requirements
+
+    # A skill must only be scored once even if the JD analysis listed it
+    # under more than one priority tier — keep the highest-priority
+    # occurrence (MANDATORY > PREFERRED > NICE_TO_HAVE) and drop the rest.
+    seen_canonicals: set[str] = set()
+    deduped: list[tuple[str, str]] = []
+    for raw_skill, priority in requirements:
+        canonical = normalize_skill(raw_skill)
+        if canonical in seen_canonicals:
+            continue
+        seen_canonicals.add(canonical)
+        deduped.append((raw_skill, priority))
+    return deduped
 
 
 def _blocks_with_sections(blocks: list[dict], sections: list[dict]) -> list[dict]:

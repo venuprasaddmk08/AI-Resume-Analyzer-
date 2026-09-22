@@ -133,13 +133,18 @@ def normalize_skill(raw: str) -> str:
     if cleaned in SKILL_ALIASES:
         return SKILL_ALIASES[cleaned]
 
-    # Preserve common all-caps/mixed-case acronyms as-is (e.g. "SQL", "AWS")
-    # rather than title-casing them into "Sql"/"Aws".
+    # Preserve a standalone short all-caps acronym as-is (e.g. "SQL", "AWS")
+    # rather than title-casing it into "Sql"/"Aws".
     stripped = raw.strip()
-    if stripped.isupper() and len(stripped) <= 6:
+    if stripped.isupper() and len(stripped) <= 6 and " " not in stripped:
         return stripped
 
-    return " ".join(word if word.isupper() else word.capitalize() for word in stripped.split())
+    # Multi-word/unknown fallback: derive the display form from the cleaned
+    # (lowercased) text, not the original casing, so two mentions of the
+    # same phrase always normalize identically regardless of how each
+    # source capitalized it (e.g. "AWS Certified Developer" from a job
+    # description vs "aws certified developer" from a resume).
+    return " ".join(word.capitalize() for word in cleaned.split())
 
 
 def skills_match(a: str, b: str) -> bool:

@@ -35,6 +35,14 @@ def test_unknown_skill_gets_stable_cleaned_display_form():
     assert normalize_skill("some totally unknown skill") == result
 
 
+def test_unknown_multiword_phrase_normalizes_the_same_regardless_of_source_casing():
+    # e.g. a certification name that isn't in the alias dictionary: a JD
+    # extraction and a resume extraction might capitalize it differently,
+    # but they must still be recognized as the same skill/certification.
+    assert normalize_skill("AWS Certified Developer") == normalize_skill("aws certified developer")
+    assert skills_match("AWS Certified Developer", "aws certified developer") is True
+
+
 def test_short_all_caps_acronym_preserved():
     assert normalize_skill("AWS") == "AWS"
     assert normalize_skill("SQL") == "SQL"

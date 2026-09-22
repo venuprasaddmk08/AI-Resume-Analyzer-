@@ -45,6 +45,8 @@ class Analysis(Base):
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
+    score: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
 
 class JobDescription(Base):
     __tablename__ = "job_descriptions"

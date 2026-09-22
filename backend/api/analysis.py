@@ -12,11 +12,14 @@ from schemas import (
     JDAnalysis,
     RequirementMatch,
     ResumeAnalysis,
+    ScoreBreakdown,
+    ScoreResponse,
     SkillsCategorizedResponse,
 )
 from services.evidence_engine import build_requirement_matches
 from services.jd_analyzer import analyze_job_description
 from services.resume_analyzer import analyze_resume
+from services.scoring_engine import compute_score
 
 router = APIRouter()
 
@@ -53,6 +56,7 @@ def _analysis_to_response(analysis: Analysis) -> AnalysisResponse:
         ai_refinement_used=analysis.ai_refinement_used,
         warnings=analysis.warnings,
         created_at=analysis.created_at,
+        score=ScoreBreakdown.model_validate(analysis.score) if analysis.score is not None else None,
     )
 
 
@@ -93,6 +97,8 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
             "on exact/normalized and literal-text signals for this run."
         )
 
+    score = compute_score(jd_analysis, resume_analysis, matches)
+
     analysis = Analysis(
         resume_id=resume.id,
         job_id=job.id,
@@ -100,6 +106,7 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
         semantic_model_available=semantic_ok,
         ai_refinement_used=ai_refinement_used,
         warnings=warnings,
+        score=score.model_dump(mode="json"),
     )
     db.add(analysis)
     db.commit()
@@ -137,3 +144,11 @@ def get_analysis_evidence(analysis_id: int, db: Session = Depends(get_db)):
     analysis = _get_analysis_or_404(analysis_id, db)
     matches = [RequirementMatch.model_validate(m) for m in analysis.matches]
     return EvidenceGraphResponse(analysis_id=analysis.id, evidence_graph=matches)
+
+
+@router.get("/{analysis_id}/score", response_model=ScoreResponse)
+def get_analysis_score(analysis_id: int, db: Session = Depends(get_db)):
+    analysis = _get_analysis_or_404(analysis_id, db)
+    if analysis.score is None:
+        raise HTTPException(status_code=404, detail="No score has been computed for this analysis.")
+    return ScoreResponse(analysis_id=analysis.id, score=ScoreBreakdown.model_validate(analysis.score))
