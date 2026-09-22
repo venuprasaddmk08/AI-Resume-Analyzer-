@@ -103,7 +103,13 @@ def generate_structured(
             logger.warning("Unexpected AI client error: %s", type(exc).__name__)
             raise AIUnavailableError("Unexpected AI client error.") from exc
 
-        raw = response.choices[0].message.content or ""
+        message = response.choices[0].message
+
+        logger.warning("AI MESSAGE: %r", message)
+        logger.warning("AI RESPONSE: %r", response)
+
+        raw = message.content or ""
+        logger.warning("RAW AI RESPONSE: %r", raw)
 
         try:
             data = json.loads(raw)
