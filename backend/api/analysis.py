@@ -8,8 +8,11 @@ from models import Analysis, JobDescription, Resume
 from schemas import (
     AnalysisRunRequest,
     AnalysisResponse,
+    AtsRecruiterResponse,
     EvidenceGraphResponse,
     InsightsResponse,
+    InterviewEvaluateRequest,
+    InterviewEvaluateResponse,
     JDAnalysis,
     RequirementMatch,
     ResumeAnalysis,
@@ -17,8 +20,10 @@ from schemas import (
     ScoreResponse,
     SkillsCategorizedResponse,
 )
+from services.ats_recruiter import build_ats_preview, compute_keyword_diff, compute_six_second_scan
 from services.evidence_engine import build_requirement_matches
 from services.insights_engine import generate_career_insights
+from services.interview_engine import evaluate_answer
 from services.jd_analyzer import analyze_job_description
 from services.resume_analyzer import analyze_resume
 from services.scoring_engine import compute_score
@@ -132,6 +137,13 @@ def _get_job_or_404(job_id: int, db: Session) -> JobDescription:
     return job
 
 
+def _get_resume_or_404(resume_id: int, db: Session) -> Resume:
+    resume = db.get(Resume, resume_id)
+    if resume is None:
+        raise HTTPException(status_code=404, detail=f"No resume found with id {resume_id}.")
+    return resume
+
+
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
 def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
     analysis = _get_analysis_or_404(analysis_id, db)
@@ -183,3 +195,37 @@ def get_analysis_insights(analysis_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return InsightsResponse(analysis_id=analysis.id, insights=insights)
+
+
+@router.post("/{analysis_id}/interview/evaluate", response_model=InterviewEvaluateResponse)
+def evaluate_interview_answer(analysis_id: int, payload: InterviewEvaluateRequest, db: Session = Depends(get_db)):
+    analysis = _get_analysis_or_404(analysis_id, db)
+    job = _get_job_or_404(analysis.job_id, db)
+    role_title = job.analysis.get("role_title") if job.analysis else None
+
+    evaluation = evaluate_answer(
+        question=payload.question,
+        answer=payload.answer,
+        based_on=payload.based_on,
+        role_title=role_title,
+    )
+    return InterviewEvaluateResponse(analysis_id=analysis.id, evaluation=evaluation)
+
+
+@router.get("/{analysis_id}/ats", response_model=AtsRecruiterResponse)
+def get_ats_recruiter_view(analysis_id: int, db: Session = Depends(get_db)):
+    analysis = _get_analysis_or_404(analysis_id, db)
+    resume = _get_resume_or_404(analysis.resume_id, db)
+    job = _get_job_or_404(analysis.job_id, db)
+    resume_analysis = _ensure_resume_analyzed(resume, db)
+
+    ats_preview = build_ats_preview(resume.normalized_text, resume.sections, resume.tables, resume.warnings)
+    keyword_diff = compute_keyword_diff(job.normalized_text, resume.normalized_text)
+    six_second_scan = compute_six_second_scan(resume_analysis, resume.normalized_text)
+
+    return AtsRecruiterResponse(
+        analysis_id=analysis.id,
+        ats_preview=ats_preview,
+        keyword_diff=keyword_diff,
+        six_second_scan=six_second_scan,
+    )

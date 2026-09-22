@@ -1,4 +1,4 @@
-import { Search, Hammer, ListChecks, Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { Search, Hammer, ListChecks, Loader2, Sparkles, AlertTriangle, Play } from "lucide-react";
 import { priorityLabel } from "../utils/deriveInsights";
 
 export default function GapsLearningTab({ matches, insightsStatus, insights, insightsError }) {
@@ -33,8 +33,8 @@ export default function GapsLearningTab({ matches, insightsStatus, insights, ins
         ) : (
           <>
             <AlertTriangle size={14} /> AI-personalized roadmap was unavailable, so a generic starting-point template
-            is shown instead — search terms instead of possibly-broken links, per the project's no-fabrication
-            policy.
+            is shown instead — search terms and a real YouTube search link, never a specific fabricated video, per
+            the project's no-fabrication policy.
           </>
         )}
       </p>
@@ -81,6 +81,17 @@ export default function GapsLearningTab({ matches, insightsStatus, insights, ins
                 </h4>
                 <p>{step.practice_project}</p>
               </div>
+
+              {step.youtube_search_url && (
+                <a
+                  className="youtube-search-link"
+                  href={step.youtube_search_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Play size={14} /> Search YouTube for {step.skill} tutorials
+                </a>
+              )}
             </div>
           );
         })}

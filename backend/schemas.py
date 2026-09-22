@@ -291,6 +291,9 @@ class LearningStep(BaseModel):
     steps: List[str] = Field(description="Concrete, ordered steps to learn this skill.")
     resources: List[str] = Field(description="Search terms to find learning resources, not live URLs.")
     practice_project: str
+    youtube_search_url: Optional[str] = Field(
+        default=None, description="A real YouTube search-results URL for this skill, not a specific fabricated video."
+    )
 
 
 class InterviewQuestion(BaseModel):
@@ -309,6 +312,192 @@ class CareerInsights(BaseModel):
 class InsightsResponse(BaseModel):
     analysis_id: int
     insights: CareerInsights
+
+
+# ---------------------------------------------------------------------------
+# Mock interview: answer evaluation + follow-up (Phase 8)
+# ---------------------------------------------------------------------------
+
+
+class InterviewEvaluateRequest(BaseModel):
+    question: str
+    based_on: Optional[str] = None
+    answer: str = Field(min_length=1)
+
+
+class InterviewEvaluation(BaseModel):
+    strengths: List[str] = Field(description="What the answer already does well. Empty if none apply.")
+    improvements: List[str] = Field(description="Specific, actionable ways to strengthen the answer.")
+    follow_up_question: Optional[str] = Field(
+        default=None, description="One natural follow-up question probing deeper on the same topic."
+    )
+    ai_generated: bool
+    warnings: List[str] = []
+
+
+class InterviewEvaluateResponse(BaseModel):
+    analysis_id: int
+    evaluation: InterviewEvaluation
+
+
+# ---------------------------------------------------------------------------
+# Career intelligence: multi-role fit + trajectory (Phase 10)
+# ---------------------------------------------------------------------------
+
+
+class RoleFitResult(BaseModel):
+    role_title: str
+    fit_score: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    matched_skills: List[str] = []
+    gap_skills: List[str] = []
+    evidence_highlights: List[str] = Field(
+        default=[], description="Reasons for the top matched skills, grounded in this resume's actual evidence."
+    )
+
+
+class CareerTrajectoryEntry(BaseModel):
+    title: Optional[str] = None
+    organization: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    description: Optional[str] = None
+
+
+class CareerIntelligenceResponse(BaseModel):
+    resume_id: int
+    role_fit: List[RoleFitResult]
+    career_trajectory: List[CareerTrajectoryEntry]
+    warnings: List[str] = []
+
+
+# ---------------------------------------------------------------------------
+# Resume intelligence: bullets, health, tone (Phase 11)
+# ---------------------------------------------------------------------------
+
+BulletSource = Literal["experience", "project", "achievement"]
+
+
+class BulletAnalysis(BaseModel):
+    source: BulletSource
+    text: str
+    has_quantification: bool
+    issues: List[str] = []
+
+
+class ResumeHealthCheck(BaseModel):
+    label: str
+    passed: bool
+    detail: str
+
+
+class ResumeHealth(BaseModel):
+    score: float = Field(ge=0.0, le=100.0)
+    checks: List[ResumeHealthCheck]
+
+
+class ResumeIntelligenceResponse(BaseModel):
+    resume_id: int
+    tone_seniority: str
+    health: ResumeHealth
+    bullets: List[BulletAnalysis]
+    warnings: List[str] = []
+
+
+class BulletRewriteRequest(BaseModel):
+    bullet_text: str = Field(min_length=1)
+
+
+class BulletRewrite(BaseModel):
+    original: str
+    rewritten: str
+    ai_generated: bool
+    warnings: List[str] = []
+
+
+class BulletRewriteResponse(BaseModel):
+    resume_id: int
+    rewrite: BulletRewrite
+
+
+# ---------------------------------------------------------------------------
+# ATS / recruiter view (Phase 12)
+# ---------------------------------------------------------------------------
+
+
+class AtsParsingPreview(BaseModel):
+    normalized_text: str
+    section_headers_detected: List[str]
+    table_count: int
+    warnings: List[str] = []
+
+
+class KeywordDiff(BaseModel):
+    shared_keywords: List[str]
+    jd_only_keywords: List[str]
+    resume_only_keywords: List[str]
+
+
+class ScanCheck(BaseModel):
+    label: str
+    passed: bool
+    detail: str
+
+
+class SixSecondScan(BaseModel):
+    score: float = Field(ge=0.0, le=100.0)
+    checks: List[ScanCheck]
+
+
+class AtsRecruiterResponse(BaseModel):
+    analysis_id: int
+    ats_preview: AtsParsingPreview
+    keyword_diff: KeywordDiff
+    six_second_scan: SixSecondScan
+
+
+# ---------------------------------------------------------------------------
+# External evidence: GitHub, LinkedIn, fairness (Phase 13)
+# ---------------------------------------------------------------------------
+
+
+class GithubConsistency(BaseModel):
+    profile_found: bool
+    username: Optional[str] = None
+    public_repos: Optional[int] = None
+    matched_languages: List[str] = []
+    unclaimed_languages: List[str] = Field(
+        default=[], description="Languages seen in public repos that aren't in the resume's claimed skills."
+    )
+    warnings: List[str] = []
+
+
+class FairnessCheck(BaseModel):
+    flagged_terms: List[str] = Field(
+        default=[], description="Personal-detail terms found in the resume text that carry discrimination risk."
+    )
+    note: str
+
+
+class ExternalEvidenceResponse(BaseModel):
+    resume_id: int
+    github: GithubConsistency
+    fairness: FairnessCheck
+
+
+class LinkedInConsistencyRequest(BaseModel):
+    linkedin_text: str = Field(min_length=1)
+
+
+class LinkedInConsistencyResult(BaseModel):
+    consistent: Optional[bool] = None
+    findings: List[str] = []
+    ai_generated: bool
+    warnings: List[str] = []
+
+
+class LinkedInConsistencyResponse(BaseModel):
+    resume_id: int
+    result: LinkedInConsistencyResult
 
 
 class ErrorResponse(BaseModel):

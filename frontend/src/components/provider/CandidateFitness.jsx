@@ -82,6 +82,7 @@ export default function CandidateFitness({ candidates, selectedId, onSelectCandi
           )}
           {activeTab === "interview" && (
             <InterviewTab
+              analysisId={analysis.analysis_id}
               insightsStatus={insightsStatus}
               insights={insights}
               insightsError={insightsError}

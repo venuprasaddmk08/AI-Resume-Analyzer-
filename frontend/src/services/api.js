@@ -81,6 +81,75 @@ export async function getAnalysisInsights(analysisId) {
   }
 }
 
+export async function evaluateInterviewAnswer(analysisId, { question, basedOn, answer }) {
+  try {
+    const { data } = await client.post(`/api/analysis/${analysisId}/interview/evaluate`, {
+      question,
+      based_on: basedOn ?? null,
+      answer,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to evaluate your answer."));
+  }
+}
+
+export async function getCareerIntelligence(resumeId) {
+  try {
+    const { data } = await client.get(`/api/resume/${resumeId}/career-intelligence`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load career intelligence."));
+  }
+}
+
+export async function getResumeIntelligence(resumeId) {
+  try {
+    const { data } = await client.get(`/api/resume/${resumeId}/intelligence`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load resume intelligence."));
+  }
+}
+
+export async function rewriteBullet(resumeId, bulletText) {
+  try {
+    const { data } = await client.post(`/api/resume/${resumeId}/bullets/rewrite`, { bullet_text: bulletText });
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to rewrite bullet."));
+  }
+}
+
+export async function getAtsRecruiterView(analysisId) {
+  try {
+    const { data } = await client.get(`/api/analysis/${analysisId}/ats`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load ATS/recruiter view."));
+  }
+}
+
+export async function getExternalEvidence(resumeId) {
+  try {
+    const { data } = await client.get(`/api/resume/${resumeId}/external-evidence`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load external evidence."));
+  }
+}
+
+export async function checkLinkedInConsistency(resumeId, linkedinText) {
+  try {
+    const { data } = await client.post(`/api/resume/${resumeId}/linkedin-consistency`, {
+      linkedin_text: linkedinText,
+    });
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to check LinkedIn consistency."));
+  }
+}
+
 export async function checkHealth() {
   try {
     const { data } = await client.get("/health");

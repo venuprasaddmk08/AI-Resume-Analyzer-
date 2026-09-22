@@ -25,6 +25,29 @@ def test_reports_unavailable_when_model_fails_to_load(monkeypatch):
     assert semantic_matcher.embed_texts(["python"]) is None
 
 
+def test_reports_unavailable_when_load_exceeds_time_budget(monkeypatch):
+    import time
+
+    monkeypatch.setattr(semantic_matcher, "_model", None)
+    monkeypatch.setattr(semantic_matcher, "_load_attempted", False)
+    monkeypatch.setattr(semantic_matcher, "_unavailable_reason", None)
+    monkeypatch.setattr(semantic_matcher, "_LOAD_TIMEOUT_SECONDS", 0.2)
+
+    def hang_forever(*args, **kwargs):
+        time.sleep(5)
+
+    import sentence_transformers
+
+    monkeypatch.setattr(sentence_transformers, "SentenceTransformer", hang_forever)
+
+    started = time.monotonic()
+    assert semantic_matcher.is_available() is False
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 2.0  # bounded by the 0.2s budget, not the 5s "hang"
+    assert "Timeout" in semantic_matcher.unavailable_reason()
+
+
 def test_embed_texts_returns_none_for_empty_input(monkeypatch):
     monkeypatch.setattr(semantic_matcher, "_load_attempted", True)
     monkeypatch.setattr(semantic_matcher, "_model", None)

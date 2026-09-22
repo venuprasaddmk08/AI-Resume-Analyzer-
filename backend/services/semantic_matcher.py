@@ -9,14 +9,22 @@ download fails for any reason (no network, blocked proxy, disk issue) —
 or the sentence-transformers package itself isn't usable — this module
 must not crash the app. It reports itself unavailable and the matching
 engine falls back to its other signals (exact/normalized/raw-text).
+
+The load is also wall-clock bounded: an unreachable Hugging Face Hub can
+otherwise hang for a long time inside its own retry/backoff logic (a
+blocked firewall or proxy, not just "no network"), which would stall the
+request holding it. A slow load degrades to "unavailable" exactly like a
+failed one — never a hang.
 """
 
 import logging
+import threading
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "all-MiniLM-L6-v2"
+_LOAD_TIMEOUT_SECONDS = 8.0
 
 _model = None
 _load_attempted = False
@@ -38,14 +46,33 @@ def _ensure_loaded() -> None:
     if _load_attempted:
         return
     _load_attempted = True
-    try:
-        from sentence_transformers import SentenceTransformer
 
-        _model = SentenceTransformer(MODEL_NAME)
-    except Exception as exc:  # network failure, missing package, corrupt cache, etc.
+    result: dict = {}
+
+    def _load():
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            result["model"] = SentenceTransformer(MODEL_NAME)
+        except Exception as exc:  # network failure, missing package, corrupt cache, etc.
+            result["error"] = exc
+
+    thread = threading.Thread(target=_load, daemon=True)
+    thread.start()
+    thread.join(timeout=_LOAD_TIMEOUT_SECONDS)
+
+    if thread.is_alive():
+        logger.warning("Semantic matching model unavailable: load exceeded %.0fs timeout.", _LOAD_TIMEOUT_SECONDS)
+        _unavailable_reason = "TimeoutError: model load exceeded time budget."
+        return
+
+    if "error" in result:
+        exc = result["error"]
         logger.warning("Semantic matching model unavailable: %s: %s", type(exc).__name__, exc)
-        _model = None
         _unavailable_reason = f"{type(exc).__name__}: could not load local embedding model."
+        return
+
+    _model = result.get("model")
 
 
 def embed_texts(texts: list[str]):
