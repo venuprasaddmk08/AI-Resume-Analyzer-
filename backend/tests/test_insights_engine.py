@@ -62,6 +62,27 @@ def test_ai_success_path(monkeypatch):
     assert result.interview_questions[0].based_on == "Python"
 
 
+def test_ai_path_caps_technical_and_project_questions(monkeypatch):
+    matches = [_match(f"Skill{i}", "MATCH") for i in range(8)]
+
+    ai_result = _AIInsights(
+        learning_roadmap=[],
+        interview_questions=(
+            [{"category": "Technical", "question": f"Q{i}", "based_on": f"Skill{i}"} for i in range(8)]
+            + [{"category": "Project", "question": f"P{i}", "based_on": f"Skill{i}"} for i in range(4)]
+            + [{"category": "Behavioral", "question": "B", "based_on": None}]
+        ),
+    )
+    monkeypatch.setattr(insights_engine, "generate_structured", lambda **kwargs: ai_result)
+
+    result = generate_career_insights(matches, JDAnalysis())
+
+    categories = [q.category for q in result.interview_questions]
+    assert categories.count("Technical") == 5
+    assert categories.count("Project") == 2
+    assert categories.count("Behavioral") == 1
+
+
 def test_falls_back_when_ai_unavailable(monkeypatch):
     matches = [
         _match("Python", "MATCH", evidence_type="PROJECT"),

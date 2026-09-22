@@ -47,6 +47,31 @@ def _with_youtube_link(step: LearningStep) -> LearningStep:
     return step
 
 
+_MAX_TECHNICAL_QUESTIONS = 5
+_MAX_PROJECT_QUESTIONS = 2
+
+
+def _cap_questions(questions: list[InterviewQuestion]) -> list[InterviewQuestion]:
+    """Enforces the spec's fixed interview mix (up to 5 technical, up to 2
+    project) even if the model didn't follow the prompt's counts exactly —
+    the prompt asks for this, but a numeric constraint from an LLM is a
+    request, not a guarantee, so it's also enforced here."""
+    capped = []
+    technical_count = 0
+    project_count = 0
+    for q in questions:
+        if q.category == "Technical":
+            if technical_count >= _MAX_TECHNICAL_QUESTIONS:
+                continue
+            technical_count += 1
+        elif q.category == "Project":
+            if project_count >= _MAX_PROJECT_QUESTIONS:
+                continue
+            project_count += 1
+        capped.append(q)
+    return capped
+
+
 def generate_career_insights(matches: list[RequirementMatch], jd_analysis: JDAnalysis) -> CareerInsights:
     """Returns CareerInsights for this set of matches. Never raises —
     always returns a usable (AI or fallback) result."""
@@ -64,7 +89,7 @@ def generate_career_insights(matches: list[RequirementMatch], jd_analysis: JDAna
         roadmap = [_with_youtube_link(step) for step in ai_insights.learning_roadmap]
         return CareerInsights(
             learning_roadmap=roadmap,
-            interview_questions=ai_insights.interview_questions,
+            interview_questions=_cap_questions(ai_insights.interview_questions),
             ai_generated=True,
         )
     except AIUnavailableError as exc:

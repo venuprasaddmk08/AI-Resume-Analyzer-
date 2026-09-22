@@ -21,11 +21,13 @@ Using only the data below, produce:
      title if given, that would let the candidate demonstrate this skill.
 
 2. "interview_questions": a mixed list covering these categories:
-   - "Technical": one question per item in "matched_skills" (in the given
-     order), each grounded in that skill's evidence_text — ask the
-     candidate to elaborate on the real thing they already described.
-   - "Project": for matched skills whose evidence_type is "PROJECT", one
-     question asking about their specific contribution to that project.
+   - "Technical": up to 5 questions, one per item in "matched_skills" (in
+     the given order, stop at 5 even if more are matched), each grounded
+     in that skill's evidence_text — ask the candidate to elaborate on
+     the real thing they already described.
+   - "Project": up to 2 questions, for matched skills whose evidence_type
+     is "PROJECT", each asking about their specific contribution to that
+     project.
    - "Behavioral": exactly two general behavioral questions (learning
      something new quickly; a difficult technical problem solved).
    - "Gap-focused": one question about the single highest-priority item in
