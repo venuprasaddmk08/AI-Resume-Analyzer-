@@ -174,6 +174,67 @@ class JobAnalysisResponse(BaseModel):
     analysis: JDAnalysis
 
 
+# ---------------------------------------------------------------------------
+# Matching + evidence (Phase 5)
+# ---------------------------------------------------------------------------
+
+RequirementPriority = Literal["MANDATORY", "PREFERRED", "NICE_TO_HAVE"]
+MatchStatus = Literal["MATCH", "PARTIAL", "GAP"]
+MatchSignal = Literal["exact", "raw_text", "semantic", "ai_reasoning", "none"]
+
+
+class EvidenceItem(BaseModel):
+    text: str
+    evidence_type: EvidenceType
+    source_page: Optional[int] = None
+    source_section: Optional[str] = None
+    origin: Literal["ai_extracted", "raw_text"]
+
+
+class RequirementMatch(BaseModel):
+    requirement: str
+    canonical_skill: str
+    priority: RequirementPriority
+    status: MatchStatus
+    evidence: List[EvidenceItem] = []
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: str
+    signal: MatchSignal
+
+
+class AnalysisRunRequest(BaseModel):
+    resume_id: int
+    job_id: int
+
+
+class AnalysisResponse(BaseModel):
+    analysis_id: int
+    resume_id: int
+    job_id: int
+    matches: List[RequirementMatch]
+    semantic_model_available: bool
+    ai_refinement_used: bool
+    warnings: List[str] = []
+    created_at: datetime
+
+
+class SkillsCategorizedResponse(BaseModel):
+    analysis_id: int
+    matching: List[RequirementMatch]
+    partial: List[RequirementMatch]
+    gaps: List[RequirementMatch]
+
+
+class EvidenceGraphResponse(BaseModel):
+    analysis_id: int
+    evidence_graph: List[RequirementMatch]
+
+
+class AIRefinementDecision(BaseModel):
+    status: MatchStatus
+    reason: str
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
