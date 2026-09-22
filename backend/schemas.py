@@ -38,7 +38,7 @@ class ResumeUploadResponse(BaseModel):
 
 
 class ParsedJobDescription(BaseModel):
-    source: Literal["pdf", "docx", "txt", "pasted"]
+    source: Literal["txt", "pasted"]
     normalized_text: str
     page_count: Optional[int] = None
     blocks: List[Block] = []

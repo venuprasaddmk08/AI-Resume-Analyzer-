@@ -38,13 +38,45 @@ def test_upload_rejects_empty_file():
     assert response.status_code == 400
 
 
-def test_upload_rejects_malformed_pdf():
+def test_upload_rejects_pdf():
+    # Job descriptions must be plain text only — PDF is rejected outright,
+    # before any parsing is attempted (even a well-formed PDF must fail).
     response = client.post(
         "/api/jobs/upload",
-        files={"file": ("jd.pdf", b"not a real pdf", "application/pdf")},
+        files={"file": ("jd.pdf", b"%PDF-1.4 well-formed-looking header", "application/pdf")},
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 400
+    assert "plain text" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_docx():
+    # Job descriptions must be plain text only — DOC/DOCX is rejected
+    # outright, before any parsing is attempted.
+    response = client.post(
+        "/api/jobs/upload",
+        files={
+            "file": (
+                "jd.docx",
+                b"PK well-formed-looking docx header",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert "plain text" in response.json()["detail"].lower()
+
+
+def test_upload_rejects_doc():
+    # Legacy .doc must also be rejected — it was never in SUPPORTED_EXTENSIONS.
+    response = client.post(
+        "/api/jobs/upload",
+        files={"file": ("jd.doc", b"legacy doc content", "application/msword")},
+    )
+
+    assert response.status_code == 400
+    assert "plain text" in response.json()["detail"].lower()
 
 
 def test_create_job_description_from_pasted_text():

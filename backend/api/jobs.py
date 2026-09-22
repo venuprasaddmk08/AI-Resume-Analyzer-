@@ -59,7 +59,10 @@ async def upload_job_description(file: UploadFile = File(...), db: Session = Dep
     if extension not in SUPPORTED_EXTENSIONS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type '.{extension or 'unknown'}'. Supported types: PDF, DOCX, TXT.",
+            detail=(
+                f"Unsupported file type '.{extension or 'unknown'}'. Job descriptions must be "
+                "plain text: upload a .txt file or paste the text instead."
+            ),
         )
 
     content = await file.read()

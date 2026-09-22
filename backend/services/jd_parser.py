@@ -1,17 +1,19 @@
-"""Job description text/layout extraction for PDF, DOCX, TXT, and pasted text.
+"""Job description text extraction for TXT uploads and pasted text.
 
-Shares the underlying PyMuPDF/python-docx extraction with resume_parser.py
-via document_extraction.py, but uses a job-description-specific section
-vocabulary (responsibilities, requirements, etc. instead of resume sections
-like experience/education).
+PDF and DOCX are intentionally NOT supported for job descriptions (only
+for resumes) — job descriptions must be plain text (uploaded .txt or
+pasted directly). Shares the underlying text extraction with
+resume_parser.py via document_extraction.py, but uses a job-description
+-specific section vocabulary (responsibilities, requirements, etc.
+instead of resume sections like experience/education).
 """
 
 from typing import Optional
 
 from schemas import Block, ParsedJobDescription, SectionPosition
-from services.document_extraction import extract_docx, extract_pdf, extract_txt, flatten_tables, match_section
+from services.document_extraction import extract_txt, match_section
 
-SUPPORTED_EXTENSIONS = {"pdf", "docx", "txt"}
+SUPPORTED_EXTENSIONS = {"txt"}
 
 JD_SECTION_KEYWORDS: dict[str, list[str]] = {
     "about": [
@@ -80,34 +82,21 @@ def parse_job_description(
     if extension not in SUPPORTED_EXTENSIONS:
         raise ValueError(f"Unsupported file extension: .{extension or 'unknown'}")
 
-    tables: list[list[list[str]]] = []
-
-    if extension == "pdf":
-        blocks, page_count, warnings = extract_pdf(content)
-        text_lines = [block.text for block in blocks]
-    elif extension == "docx":
-        blocks, tables, warnings = extract_docx(content)
-        text_lines = [block.text for block in blocks] + flatten_tables(tables)
-        page_count = None
-    else:
-        blocks, warnings = extract_txt(content)
-        text_lines = [block.text for block in blocks]
-        page_count = None
+    blocks, warnings = extract_txt(content)
+    text_lines = [block.text for block in blocks]
 
     sections = _detect_sections(blocks)
     normalized_text = "\n".join(text_lines)
     warnings = list(warnings)
     if not normalized_text.strip():
-        warnings.append(
-            "Text could not be extracted from this PDF." if extension == "pdf" else "No text could be extracted from this document."
-        )
+        warnings.append("No text could be extracted from this document.")
 
     return ParsedJobDescription(
-        source=extension,
+        source="txt",
         normalized_text=normalized_text,
-        page_count=page_count,
+        page_count=None,
         blocks=blocks,
-        tables=tables,
+        tables=[],
         sections_detected=sections,
         warnings=warnings,
     )
