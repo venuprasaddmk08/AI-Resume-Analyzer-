@@ -9,6 +9,7 @@ from schemas import (
     AnalysisRunRequest,
     AnalysisResponse,
     EvidenceGraphResponse,
+    InsightsResponse,
     JDAnalysis,
     RequirementMatch,
     ResumeAnalysis,
@@ -17,6 +18,7 @@ from schemas import (
     SkillsCategorizedResponse,
 )
 from services.evidence_engine import build_requirement_matches
+from services.insights_engine import generate_career_insights
 from services.jd_analyzer import analyze_job_description
 from services.resume_analyzer import analyze_resume
 from services.scoring_engine import compute_score
@@ -46,7 +48,7 @@ def _ensure_job_analyzed(job: JobDescription, db: Session) -> JDAnalysis:
     return analysis
 
 
-def _analysis_to_response(analysis: Analysis) -> AnalysisResponse:
+def _analysis_to_response(analysis: Analysis, role_title: str | None = None) -> AnalysisResponse:
     return AnalysisResponse(
         analysis_id=analysis.id,
         resume_id=analysis.resume_id,
@@ -57,6 +59,7 @@ def _analysis_to_response(analysis: Analysis) -> AnalysisResponse:
         warnings=analysis.warnings,
         created_at=analysis.created_at,
         score=ScoreBreakdown.model_validate(analysis.score) if analysis.score is not None else None,
+        role_title=role_title,
     )
 
 
@@ -112,7 +115,7 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(analysis)
 
-    return _analysis_to_response(analysis)
+    return _analysis_to_response(analysis, role_title=jd_analysis.role_title)
 
 
 def _get_analysis_or_404(analysis_id: int, db: Session) -> Analysis:
@@ -122,9 +125,19 @@ def _get_analysis_or_404(analysis_id: int, db: Session) -> Analysis:
     return analysis
 
 
+def _get_job_or_404(job_id: int, db: Session) -> JobDescription:
+    job = db.get(JobDescription, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No job description found with id {job_id}.")
+    return job
+
+
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
 def get_analysis(analysis_id: int, db: Session = Depends(get_db)):
-    return _analysis_to_response(_get_analysis_or_404(analysis_id, db))
+    analysis = _get_analysis_or_404(analysis_id, db)
+    job = db.get(JobDescription, analysis.job_id)
+    role_title = job.analysis.get("role_title") if job and job.analysis else None
+    return _analysis_to_response(analysis, role_title=role_title)
 
 
 @router.get("/{analysis_id}/skills", response_model=SkillsCategorizedResponse)
@@ -152,3 +165,21 @@ def get_analysis_score(analysis_id: int, db: Session = Depends(get_db)):
     if analysis.score is None:
         raise HTTPException(status_code=404, detail="No score has been computed for this analysis.")
     return ScoreResponse(analysis_id=analysis.id, score=ScoreBreakdown.model_validate(analysis.score))
+
+
+@router.get("/{analysis_id}/insights", response_model=InsightsResponse)
+def get_analysis_insights(analysis_id: int, db: Session = Depends(get_db)):
+    analysis = _get_analysis_or_404(analysis_id, db)
+
+    if analysis.insights is not None:
+        return InsightsResponse(analysis_id=analysis.id, insights=analysis.insights)
+
+    job = _get_job_or_404(analysis.job_id, db)
+    jd_analysis = _ensure_job_analyzed(job, db)
+    matches = [RequirementMatch.model_validate(m) for m in analysis.matches]
+
+    insights = generate_career_insights(matches, jd_analysis)
+    analysis.insights = insights.model_dump(mode="json")
+    db.commit()
+
+    return InsightsResponse(analysis_id=analysis.id, insights=insights)

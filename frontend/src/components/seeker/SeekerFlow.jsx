@@ -69,9 +69,7 @@ export default function SeekerFlow() {
 
       {phase === "error" && <ErrorState message={errorMessage} onRetry={handleRetry} />}
 
-      {phase === "results" && analysis && (
-        <ResultsDashboard analysis={analysis} jdRoleTitle={null} onStartOver={handleStartOver} />
-      )}
+      {phase === "results" && analysis && <ResultsDashboard analysis={analysis} onStartOver={handleStartOver} />}
     </>
   );
 }

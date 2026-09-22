@@ -1,4 +1,4 @@
-"""Centralized AI client (Groq).
+"""Centralized AI client (OpenRouter, via the OpenAI-compatible SDK).
 
 Every AI call in the app must go through generate_structured() so that
 model selection, timeouts, retries, JSON-schema validation, and the
@@ -13,11 +13,11 @@ import json
 import logging
 from typing import Optional, Type, TypeVar
 
-from groq import (
+from openai import (
     APIConnectionError,
     APIError,
     APITimeoutError,
-    Groq,
+    OpenAI,
     RateLimitError,
 )
 from pydantic import BaseModel, ValidationError
@@ -42,14 +42,18 @@ class AIUnavailableError(Exception):
     gracefully — it must never propagate into a 500 that crashes the API."""
 
 
-_client: Optional[Groq] = None
+_client: Optional[OpenAI] = None
 
 
-def _get_client() -> Groq:
+def _get_client() -> OpenAI:
     global _client
     if _client is None:
         settings = get_settings()
-        _client = Groq(api_key=settings.groq_api_key, timeout=30.0)
+        _client = OpenAI(
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            timeout=30.0,
+        )
     return _client
 
 
@@ -74,7 +78,7 @@ def generate_structured(
     """
     settings = get_settings()
     if not settings.ai_available:
-        raise AIUnavailableError("AI is not configured (missing GROQ_API_KEY or DEMO_MODE is on).")
+        raise AIUnavailableError("AI is not configured (missing OPENROUTER_API_KEY or DEMO_MODE is on).")
 
     client = _get_client()
     messages: list[dict[str, str]] = [
@@ -87,13 +91,13 @@ def generate_structured(
     for attempt in range(max_repair_attempts + 1):
         try:
             response = client.chat.completions.create(
-                model=settings.groq_model,
+                model=settings.openrouter_model,
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.1,
             )
         except (APITimeoutError, APIConnectionError, RateLimitError, APIError) as exc:
-            logger.warning("Groq provider error: %s", type(exc).__name__)
+            logger.warning("OpenRouter provider error: %s", type(exc).__name__)
             raise AIUnavailableError(f"AI provider error: {type(exc).__name__}") from exc
         except Exception as exc:  # never let an unexpected SDK error crash the request
             logger.warning("Unexpected AI client error: %s", type(exc).__name__)

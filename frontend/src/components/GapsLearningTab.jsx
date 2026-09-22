@@ -1,37 +1,63 @@
-import { Search, Hammer, ListChecks } from "lucide-react";
-import { learningRoadmapFor, priorityLabel, sortByPriority } from "../utils/deriveInsights";
+import { Search, Hammer, ListChecks, Loader2, Sparkles, AlertTriangle } from "lucide-react";
+import { priorityLabel } from "../utils/deriveInsights";
 
-export default function GapsLearningTab({ matches, audience = "seeker" }) {
-  const gaps = sortByPriority(matches.filter((m) => m.status === "GAP"));
+export default function GapsLearningTab({ matches, insightsStatus, insights, insightsError }) {
+  const gaps = matches.filter((m) => m.status === "GAP");
 
   if (gaps.length === 0) {
     return <p className="empty-state">No skill gaps were found for this job description — nice work.</p>;
   }
 
+  if (insightsStatus === "loading" || insightsStatus === "idle") {
+    return (
+      <div className="insights-loading">
+        <Loader2 size={18} className="spin" />
+        <span>Generating a learning roadmap for each gap...</span>
+      </div>
+    );
+  }
+
+  if (insightsStatus === "error") {
+    return <p className="empty-state">{insightsError || "Could not load the learning roadmap."}</p>;
+  }
+
+  const roadmap = insights?.learning_roadmap || [];
+
   return (
     <div className="gaps-tab">
       <p className="tab-intro">
-        Suggested starting points for each gap. These are generic learning steps, not a personalized AI-generated
-        curriculum — search terms instead of possibly-broken links, per the project's no-fabrication policy.
+        {insights?.ai_generated ? (
+          <>
+            <Sparkles size={14} /> AI-personalized learning roadmap, generated from this specific gap analysis.
+          </>
+        ) : (
+          <>
+            <AlertTriangle size={14} /> AI-personalized roadmap was unavailable, so a generic starting-point template
+            is shown instead — search terms instead of possibly-broken links, per the project's no-fabrication
+            policy.
+          </>
+        )}
       </p>
       <div className="gap-cards">
-        {gaps.map((gap, i) => {
-          const roadmap = learningRoadmapFor(gap, audience);
+        {roadmap.map((step, i) => {
+          const gapMatch = matches.find((m) => m.canonical_skill === step.skill);
           return (
             <div className="gap-card" key={i}>
               <div className="gap-card-head">
-                <h3>{gap.canonical_skill}</h3>
-                <span className={`priority-badge priority-${gap.priority.toLowerCase()}`}>{priorityLabel(gap.priority)}</span>
+                <h3>{step.skill}</h3>
+                <span className={`priority-badge priority-${step.priority.toLowerCase()}`}>
+                  {priorityLabel(step.priority)}
+                </span>
               </div>
-              <p className="gap-reason">{gap.reason}</p>
+              {gapMatch && <p className="gap-reason">{gapMatch.reason}</p>}
 
               <div className="gap-section">
                 <h4>
                   <ListChecks size={14} /> Suggested sequence
                 </h4>
                 <ol>
-                  {roadmap.steps.map((step, si) => (
-                    <li key={si}>{step}</li>
+                  {step.steps.map((s, si) => (
+                    <li key={si}>{s}</li>
                   ))}
                 </ol>
               </div>
@@ -41,7 +67,7 @@ export default function GapsLearningTab({ matches, audience = "seeker" }) {
                   <Search size={14} /> Search terms
                 </h4>
                 <div className="search-term-chips">
-                  {roadmap.searchTerms.map((term, ti) => (
+                  {step.resources.map((term, ti) => (
                     <span className="search-term-chip" key={ti}>
                       {term}
                     </span>
@@ -53,7 +79,7 @@ export default function GapsLearningTab({ matches, audience = "seeker" }) {
                 <h4>
                   <Hammer size={14} /> Practice project
                 </h4>
-                <p>{roadmap.practiceProject}</p>
+                <p>{step.practice_project}</p>
               </div>
             </div>
           );

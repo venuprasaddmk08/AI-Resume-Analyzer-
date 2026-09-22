@@ -1,4 +1,4 @@
-"""Tests for the centralized AI client. These never call the real Groq API —
+"""Tests for the centralized AI client. These never call the real OpenRouter API —
 per the testing rules, AI behavior is verified against mocked responses only."""
 
 import json
@@ -16,9 +16,9 @@ class _DummySchema(BaseModel):
 
 
 class _FakeSettings:
-    def __init__(self, ai_available=True, groq_model="test-model"):
+    def __init__(self, ai_available=True, openrouter_model="test-model"):
         self.ai_available = ai_available
-        self.groq_model = groq_model
+        self.openrouter_model = openrouter_model
 
 
 def _fake_response(content: str):

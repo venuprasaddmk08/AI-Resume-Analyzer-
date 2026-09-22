@@ -217,6 +217,7 @@ class AnalysisResponse(BaseModel):
     warnings: List[str] = []
     created_at: datetime
     score: Optional["ScoreBreakdown"] = None
+    role_title: Optional[str] = None
 
 
 class SkillsCategorizedResponse(BaseModel):
@@ -275,6 +276,39 @@ class ScoreBreakdown(BaseModel):
 class ScoreResponse(BaseModel):
     analysis_id: int
     score: ScoreBreakdown
+
+
+# ---------------------------------------------------------------------------
+# Career insights: learning roadmap + interview questions (Phase 7)
+# ---------------------------------------------------------------------------
+
+InterviewCategory = Literal["Technical", "Project", "Behavioral", "Gap-focused"]
+
+
+class LearningStep(BaseModel):
+    skill: str
+    priority: RequirementPriority
+    steps: List[str] = Field(description="Concrete, ordered steps to learn this skill.")
+    resources: List[str] = Field(description="Search terms to find learning resources, not live URLs.")
+    practice_project: str
+
+
+class InterviewQuestion(BaseModel):
+    category: InterviewCategory
+    question: str
+    based_on: Optional[str] = None
+
+
+class CareerInsights(BaseModel):
+    learning_roadmap: List[LearningStep] = []
+    interview_questions: List[InterviewQuestion] = []
+    ai_generated: bool
+    warnings: List[str] = []
+
+
+class InsightsResponse(BaseModel):
+    analysis_id: int
+    insights: CareerInsights
 
 
 class ErrorResponse(BaseModel):

@@ -4,6 +4,7 @@ import OverviewTab from "./OverviewTab";
 import SkillsTab from "./SkillsTab";
 import GapsLearningTab from "./GapsLearningTab";
 import InterviewTab from "./InterviewTab";
+import useAnalysisInsights from "../hooks/useAnalysisInsights";
 
 const TABS = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
@@ -12,15 +13,20 @@ const TABS = [
   { id: "interview", label: "Mock Interview", icon: MessagesSquare },
 ];
 
-export default function ResultsDashboard({ analysis, jdRoleTitle, onStartOver }) {
+export default function ResultsDashboard({ analysis, onStartOver }) {
   const [activeTab, setActiveTab] = useState("overview");
+  const insightsEnabled = activeTab === "gaps" || activeTab === "interview";
+  const { status: insightsStatus, insights, error: insightsError } = useAnalysisInsights(
+    analysis.analysis_id,
+    insightsEnabled
+  );
 
   return (
     <div className="dashboard">
       <div className="dashboard-header">
         <div>
           <h1>Analysis Results</h1>
-          {jdRoleTitle && <p className="role-subtitle">Compared against: {jdRoleTitle}</p>}
+          {analysis.role_title && <p className="role-subtitle">Compared against: {analysis.role_title}</p>}
         </div>
         <button type="button" className="btn-secondary" onClick={onStartOver}>
           <RotateCcw size={15} />
@@ -48,8 +54,17 @@ export default function ResultsDashboard({ analysis, jdRoleTitle, onStartOver })
       <div className="tab-panel">
         {activeTab === "overview" && <OverviewTab score={analysis.score} warnings={analysis.warnings} />}
         {activeTab === "skills" && <SkillsTab matches={analysis.matches} />}
-        {activeTab === "gaps" && <GapsLearningTab matches={analysis.matches} />}
-        {activeTab === "interview" && <InterviewTab analysis={analysis} jdRoleTitle={jdRoleTitle} />}
+        {activeTab === "gaps" && (
+          <GapsLearningTab
+            matches={analysis.matches}
+            insightsStatus={insightsStatus}
+            insights={insights}
+            insightsError={insightsError}
+          />
+        )}
+        {activeTab === "interview" && (
+          <InterviewTab insightsStatus={insightsStatus} insights={insights} insightsError={insightsError} />
+        )}
       </div>
     </div>
   );

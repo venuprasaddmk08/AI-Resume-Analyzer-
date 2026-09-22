@@ -46,6 +46,7 @@ class Analysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
     score: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    insights: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class JobDescription(Base):

@@ -6,6 +6,7 @@ import GapsLearningTab from "../GapsLearningTab";
 import InterviewTab from "../InterviewTab";
 import CandidateProfileSummary from "./CandidateProfileSummary";
 import CandidateList from "./CandidateList";
+import useAnalysisInsights from "../../hooks/useAnalysisInsights";
 
 const TABS = [
   { id: "profile", label: "Profile", icon: UserSquare2 },
@@ -22,6 +23,11 @@ export default function CandidateFitness({ candidates, selectedId, onSelectCandi
 
   const { resumeAnalysis, analysis, filename } = candidate;
   const displayName = resumeAnalysis?.candidate_name || filename;
+  const insightsEnabled = activeTab === "gaps" || activeTab === "interview";
+  const { status: insightsStatus, insights, error: insightsError } = useAnalysisInsights(
+    analysis.analysis_id,
+    insightsEnabled
+  );
 
   return (
     <div className="provider-fitness">
@@ -66,8 +72,22 @@ export default function CandidateFitness({ candidates, selectedId, onSelectCandi
           {activeTab === "profile" && <CandidateProfileSummary resumeAnalysis={resumeAnalysis} />}
           {activeTab === "overview" && <OverviewTab score={analysis.score} warnings={analysis.warnings} />}
           {activeTab === "skills" && <SkillsTab matches={analysis.matches} />}
-          {activeTab === "gaps" && <GapsLearningTab matches={analysis.matches} audience="provider" />}
-          {activeTab === "interview" && <InterviewTab analysis={analysis} jdRoleTitle={jdRoleTitle} audience="provider" />}
+          {activeTab === "gaps" && (
+            <GapsLearningTab
+              matches={analysis.matches}
+              insightsStatus={insightsStatus}
+              insights={insights}
+              insightsError={insightsError}
+            />
+          )}
+          {activeTab === "interview" && (
+            <InterviewTab
+              insightsStatus={insightsStatus}
+              insights={insights}
+              insightsError={insightsError}
+              audience="provider"
+            />
+          )}
         </div>
       </div>
     </div>

@@ -72,6 +72,15 @@ export async function runAnalysis(resumeId, jobId) {
   }
 }
 
+export async function getAnalysisInsights(analysisId) {
+  try {
+    const { data } = await client.get(`/api/analysis/${analysisId}/insights`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to load learning roadmap and interview questions."));
+  }
+}
+
 export async function checkHealth() {
   try {
     const { data } = await client.get("/health");
