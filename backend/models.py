@@ -24,6 +24,9 @@ class Resume(Base):
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
+    analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
 
 class JobDescription(Base):
     __tablename__ = "job_descriptions"
@@ -38,3 +41,6 @@ class JobDescription(Base):
     sections: Mapped[list] = mapped_column(JSON, default=list)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    analysis: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    analyzed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

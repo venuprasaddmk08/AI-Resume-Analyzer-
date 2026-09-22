@@ -1,0 +1,24 @@
+Backend Developer
+
+About the role
+We are looking for a Backend Developer to join our engineering team and help
+build and scale our core REST API services.
+
+Responsibilities
+Design, build, and maintain REST APIs used by our web and mobile clients.
+Write efficient SQL queries and maintain database schemas.
+Collaborate with the DevOps team on deployment and infrastructure.
+
+Requirements
+2+ years of professional experience in backend development.
+Strong proficiency in Python and experience with FastAPI or a similar framework.
+Solid understanding of SQL and relational databases.
+Experience building and consuming REST APIs.
+
+Preferred Qualifications
+Experience with Docker for containerizing services.
+Experience with AWS cloud infrastructure.
+Familiarity with Kubernetes for container orchestration.
+
+Benefits
+Remote-friendly work, health insurance, and a learning stipend.

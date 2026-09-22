@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -7,7 +8,8 @@ from sqlalchemy.orm import Session
 from config import get_settings
 from database import get_db
 from models import Resume
-from schemas import ResumeUploadResponse
+from schemas import ResumeAnalysisResponse, ResumeAnalyzeRequest, ResumeUploadResponse
+from services.resume_analyzer import analyze_resume
 from services.resume_parser import SUPPORTED_EXTENSIONS, parse_resume
 
 router = APIRouter()
@@ -73,4 +75,23 @@ async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_
         filename=resume.original_filename,
         created_at=resume.created_at,
         parsed=parsed,
+    )
+
+
+@router.post("/analyze", response_model=ResumeAnalysisResponse)
+async def analyze_resume_endpoint(payload: ResumeAnalyzeRequest, db: Session = Depends(get_db)):
+    resume = db.get(Resume, payload.resume_id)
+    if resume is None:
+        raise HTTPException(status_code=404, detail=f"No resume found with id {payload.resume_id}.")
+
+    analysis = analyze_resume(resume.normalized_text)
+
+    resume.analysis = analysis.model_dump(mode="json")
+    resume.analyzed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return ResumeAnalysisResponse(
+        resume_id=resume.id,
+        analyzed_at=resume.analyzed_at,
+        analysis=analysis,
     )

@@ -1,5 +1,6 @@
 import os
 import re
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -7,7 +8,14 @@ from sqlalchemy.orm import Session
 from config import get_settings
 from database import get_db
 from models import JobDescription
-from schemas import JobDescriptionCreateRequest, JobDescriptionResponse, ParsedJobDescription
+from schemas import (
+    JobAnalysisResponse,
+    JobAnalyzeRequest,
+    JobDescriptionCreateRequest,
+    JobDescriptionResponse,
+    ParsedJobDescription,
+)
+from services.jd_analyzer import analyze_job_description
 from services.jd_parser import SUPPORTED_EXTENSIONS, parse_job_description
 
 router = APIRouter()
@@ -92,3 +100,22 @@ async def create_job_description(payload: JobDescriptionCreateRequest, db: Sessi
     parsed = parse_job_description(pasted_text=payload.text)
     job = _persist(db, None, parsed)
     return JobDescriptionResponse(job_id=job.id, filename=job.original_filename, created_at=job.created_at, parsed=parsed)
+
+
+@router.post("/analyze", response_model=JobAnalysisResponse)
+async def analyze_job_description_endpoint(payload: JobAnalyzeRequest, db: Session = Depends(get_db)):
+    job = db.get(JobDescription, payload.job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"No job description found with id {payload.job_id}.")
+
+    analysis = analyze_job_description(job.normalized_text)
+
+    job.analysis = analysis.model_dump(mode="json")
+    job.analyzed_at = datetime.now(timezone.utc)
+    db.commit()
+
+    return JobAnalysisResponse(
+        job_id=job.id,
+        analyzed_at=job.analyzed_at,
+        analysis=analysis,
+    )

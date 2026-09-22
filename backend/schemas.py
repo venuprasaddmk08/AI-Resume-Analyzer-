@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Block(BaseModel):
@@ -56,6 +56,122 @@ class JobDescriptionResponse(BaseModel):
 
 class JobDescriptionCreateRequest(BaseModel):
     text: str
+
+
+# ---------------------------------------------------------------------------
+# Resume structured analysis (Phase 4)
+# ---------------------------------------------------------------------------
+
+EvidenceType = Literal["WORK", "INTERNSHIP", "PROJECT", "EDUCATION", "CERTIFICATION", "COURSE", "OTHER"]
+
+
+class ContactInfo(BaseModel):
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+
+
+class SkillEvidence(BaseModel):
+    skill: str
+    evidence_text: str = Field(
+        description="Exact or closely paraphrased quote from the resume that supports this skill. "
+        "Never invent this — if there is no supporting text, do not include the skill."
+    )
+    evidence_type: EvidenceType
+    source_page: Optional[int] = None
+    source_section: Optional[str] = None
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+
+
+class EducationEntry(BaseModel):
+    degree: Optional[str] = None
+    institution: Optional[str] = None
+    field_of_study: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    evidence_text: Optional[str] = None
+
+
+class ExperienceEntry(BaseModel):
+    title: Optional[str] = None
+    organization: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    description: Optional[str] = None
+    evidence_text: Optional[str] = None
+
+
+class ProjectEntry(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    technologies: List[str] = []
+    evidence_text: Optional[str] = None
+
+
+class CertificationEntry(BaseModel):
+    name: str
+    issuer: Optional[str] = None
+    date: Optional[str] = None
+    evidence_text: Optional[str] = None
+
+
+class ResumeAnalysis(BaseModel):
+    candidate_name: Optional[str] = None
+    contact: ContactInfo = Field(default_factory=ContactInfo)
+    skills: List[SkillEvidence] = []
+    education: List[EducationEntry] = []
+    experience: List[ExperienceEntry] = []
+    projects: List[ProjectEntry] = []
+    certifications: List[CertificationEntry] = []
+    achievements: List[str] = []
+    languages: List[str] = []
+    sections_detected: List[str] = []
+    ai_used: bool = True
+    warnings: List[str] = []
+
+
+class ResumeAnalyzeRequest(BaseModel):
+    resume_id: int
+
+
+class ResumeAnalysisResponse(BaseModel):
+    resume_id: int
+    analyzed_at: datetime
+    analysis: ResumeAnalysis
+
+
+# ---------------------------------------------------------------------------
+# Job description structured analysis (Phase 4)
+# ---------------------------------------------------------------------------
+
+
+class JDAnalysis(BaseModel):
+    role_title: Optional[str] = None
+    seniority: Optional[str] = None
+    required_skills: List[str] = []
+    preferred_skills: List[str] = []
+    nice_to_have_skills: List[str] = []
+    experience_requirements: Optional[str] = None
+    education_requirements: Optional[str] = None
+    certifications: List[str] = []
+    responsibilities: List[str] = []
+    tools: List[str] = []
+    domain_knowledge: List[str] = []
+    ai_used: bool = True
+    warnings: List[str] = []
+
+
+class JobAnalyzeRequest(BaseModel):
+    job_id: int
+
+
+class JobAnalysisResponse(BaseModel):
+    job_id: int
+    analyzed_at: datetime
+    analysis: JDAnalysis
 
 
 class ErrorResponse(BaseModel):

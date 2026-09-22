@@ -1,0 +1,30 @@
+Jane Doe
+jane.doe@example.com | (555) 123-4567 | linkedin.com/in/janedoe | github.com/janedoe
+
+Summary
+Backend-focused software engineer with internship experience building REST APIs
+and a personal interest in applied machine learning.
+
+Skills
+Python, SQL, FastAPI, REST API, Git, Machine Learning, Pandas, Linux
+
+Experience
+Software Engineering Intern, Acme Analytics (Jun 2024 - Aug 2024)
+Built and maintained internal REST APIs using Python and FastAPI to serve
+analytics data to the company's internal dashboard. Wrote SQL queries against
+a PostgreSQL database to support new reporting features.
+
+Projects
+Customer Churn Prediction (Personal Project)
+Built a machine learning model in Python using scikit-learn and Pandas to
+predict customer churn from a public dataset. Exposed the trained model
+through a small FastAPI service with a REST API endpoint for predictions.
+
+Education
+B.Tech in Computer Science, State University (2021 - 2025)
+
+Certifications
+None listed.
+
+Languages
+English (fluent)
