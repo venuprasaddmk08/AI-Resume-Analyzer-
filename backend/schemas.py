@@ -37,6 +37,27 @@ class ResumeUploadResponse(BaseModel):
     parsed: ParsedResume
 
 
+class ParsedJobDescription(BaseModel):
+    source: Literal["pdf", "docx", "txt", "pasted"]
+    normalized_text: str
+    page_count: Optional[int] = None
+    blocks: List[Block] = []
+    tables: List[List[List[str]]] = []
+    sections_detected: List[SectionPosition] = []
+    warnings: List[str] = []
+
+
+class JobDescriptionResponse(BaseModel):
+    job_id: int
+    filename: Optional[str] = None
+    created_at: datetime
+    parsed: ParsedJobDescription
+
+
+class JobDescriptionCreateRequest(BaseModel):
+    text: str
+
+
 class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None

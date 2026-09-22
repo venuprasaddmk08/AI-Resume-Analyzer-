@@ -23,3 +23,18 @@ class Resume(Base):
     sections: Mapped[list] = mapped_column(JSON, default=list)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class JobDescription(Base):
+    __tablename__ = "job_descriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    source: Mapped[str] = mapped_column(String(10))
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    normalized_text: Mapped[str] = mapped_column(Text)
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    blocks: Mapped[list] = mapped_column(JSON, default=list)
+    tables: Mapped[list] = mapped_column(JSON, default=list)
+    sections: Mapped[list] = mapped_column(JSON, default=list)
+    warnings: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
