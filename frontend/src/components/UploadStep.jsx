@@ -1,53 +1,9 @@
-import { FileText, Upload, ClipboardPaste, ArrowRight, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { FileText, ArrowRight } from "lucide-react";
+import { useState } from "react";
+import FilePicker from "./shared/FilePicker";
+import JobDescriptionPicker from "./shared/JobDescriptionPicker";
 
 const RESUME_ACCEPT = ".pdf,.doc,.docx,.txt";
-const JD_ACCEPT = ".txt";
-
-function FilePicker({ label, accept, hint, file, onChange, icon: Icon }) {
-  const inputRef = useRef(null);
-
-  return (
-    <div className="file-picker">
-      <div className="file-picker-label">
-        <Icon size={16} />
-        <span>{label}</span>
-      </div>
-      <div className={`file-drop ${file ? "has-file" : ""}`} onClick={() => inputRef.current?.click()}>
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          hidden
-          onChange={(e) => onChange(e.target.files?.[0] || null)}
-        />
-        {file ? (
-          <div className="file-chip">
-            <FileText size={16} />
-            <span>{file.name}</span>
-            <button
-              type="button"
-              className="file-chip-remove"
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange(null);
-              }}
-              aria-label="Remove file"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ) : (
-          <>
-            <Upload size={22} />
-            <p>Click to choose a file</p>
-            <span className="file-hint">{hint}</span>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 export default function UploadStep({ onAnalyze, disabled }) {
   const [resumeFile, setResumeFile] = useState(null);
@@ -87,72 +43,15 @@ export default function UploadStep({ onAnalyze, disabled }) {
           icon={FileText}
         />
 
-        <div className="file-picker">
-          <div className="file-picker-label">
-            <ClipboardPaste size={16} />
-            <span>2. Job Description</span>
-          </div>
-
-          <div className="jd-mode-toggle">
-            <button
-              type="button"
-              className={jdMode === "paste" ? "active" : ""}
-              onClick={() => setJdMode("paste")}
-            >
-              Paste text
-            </button>
-            <button
-              type="button"
-              className={jdMode === "upload" ? "active" : ""}
-              onClick={() => setJdMode("upload")}
-            >
-              Upload .txt
-            </button>
-          </div>
-
-          {jdMode === "paste" ? (
-            <textarea
-              className="jd-textarea"
-              placeholder="Paste the full job description here..."
-              value={jdText}
-              onChange={(e) => setJdText(e.target.value)}
-              rows={8}
-            />
-          ) : (
-            <div className={`file-drop ${jdFile ? "has-file" : ""}`} onClick={() => document.getElementById("jd-file-input")?.click()}>
-              <input
-                id="jd-file-input"
-                type="file"
-                accept={JD_ACCEPT}
-                hidden
-                onChange={(e) => setJdFile(e.target.files?.[0] || null)}
-              />
-              {jdFile ? (
-                <div className="file-chip">
-                  <FileText size={16} />
-                  <span>{jdFile.name}</span>
-                  <button
-                    type="button"
-                    className="file-chip-remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setJdFile(null);
-                    }}
-                    aria-label="Remove file"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <Upload size={22} />
-                  <p>Click to choose a file</p>
-                  <span className="file-hint">Plain text (.txt) only</span>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+        <JobDescriptionPicker
+          label="2. Job Description"
+          jdMode={jdMode}
+          setJdMode={setJdMode}
+          jdText={jdText}
+          setJdText={setJdText}
+          jdFile={jdFile}
+          setJdFile={setJdFile}
+        />
       </div>
 
       {validationError && <p className="inline-error">{validationError}</p>}

@@ -24,6 +24,11 @@
   font-size: 1.05rem;
   letter-spacing: 0.01em;
   color: #f5efe4;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .brand svg {
@@ -34,6 +39,24 @@
   color: #c8bfa9;
   font-size: 0.85rem;
   margin: 0;
+  flex: 1;
+}
+
+.home-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245, 239, 228, 0.08);
+  border: 1px solid rgba(245, 239, 228, 0.18);
+  color: #f5efe4;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.home-link:hover {
+  background: rgba(245, 239, 228, 0.16);
 }
 
 .app-main {
@@ -64,6 +87,11 @@
   grid-template-columns: 1fr 1fr;
   gap: 20px;
   margin-bottom: 20px;
+}
+
+.upload-grid.single {
+  grid-template-columns: 1fr;
+  max-width: 520px;
 }
 
 .file-picker {
@@ -835,6 +863,272 @@
   border-color: var(--color-primary);
 }
 
+/* ---------- Welcome screen ---------- */
+
+.welcome-screen {
+  max-width: 720px;
+}
+
+.welcome-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-match-bg);
+  color: var(--color-primary-dark);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+
+.welcome-screen h1 {
+  font-size: 2.1rem;
+  line-height: 1.2;
+  margin: 0 0 14px;
+}
+
+.welcome-lede {
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+  max-width: 640px;
+  margin: 0 0 28px;
+}
+
+.welcome-points {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 36px;
+}
+
+.welcome-point {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-ink);
+  font-size: 0.92rem;
+}
+
+.welcome-point svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.welcome-choose {
+  font-size: 1rem;
+  color: var(--color-muted);
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+
+.role-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.role-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.role-card:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.role-card svg {
+  color: var(--color-accent);
+}
+
+.role-card-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--color-ink);
+}
+
+.role-card-desc {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+/* ---------- Provider flow ---------- */
+
+.provider-step-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.provider-step-head h2 {
+  margin: 0;
+}
+
+.provider-step h2 {
+  font-size: 1.3rem;
+  margin: 0 0 8px;
+}
+
+.provider-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.provider-fitness {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.candidate-list {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: sticky;
+  top: 20px;
+}
+
+.candidate-list-head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-muted);
+  padding: 4px 8px 8px;
+}
+
+.candidate-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.85rem;
+  color: var(--color-ink);
+}
+
+.candidate-list-item:hover {
+  background: #f6f3ec;
+}
+
+.candidate-list-item.active {
+  border-color: var(--color-primary);
+  background: var(--color-match-bg);
+}
+
+.candidate-list-item svg {
+  color: var(--color-muted);
+  flex-shrink: 0;
+}
+
+.candidate-list-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-list-score {
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.candidate-list-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  background: none;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  cursor: pointer;
+  color: var(--color-primary-dark);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.candidate-list-add:hover {
+  border-color: var(--color-primary);
+  background: #f4f9f7;
+}
+
+.candidate-detail {
+  min-width: 0;
+}
+
+.candidate-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.profile-section {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+}
+
+.profile-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-primary-dark);
+  margin: 0 0 8px;
+}
+
+.profile-section ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 0.85rem;
+  color: var(--color-ink);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-dates {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 760px) {
@@ -861,5 +1155,23 @@
 
   .dashboard-header {
     flex-direction: column;
+  }
+
+  .role-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .provider-fitness {
+    grid-template-columns: 1fr;
+  }
+
+  .candidate-list {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .candidate-list-item {
+    flex: 1 1 auto;
   }
 }

@@ -7,6 +7,9 @@ const client = axios.create({ baseURL: API_BASE_URL });
 function extractErrorMessage(error, fallback) {
   const detail = error?.response?.data?.detail;
   if (typeof detail === "string") return detail;
+  if (error?.request && !error?.response) {
+    return "Could not reach the server. Please check that the backend is running and try again.";
+  }
   if (error?.message) return error.message;
   return fallback;
 }
@@ -39,6 +42,24 @@ export async function createJobDescriptionFromText(text) {
     return data;
   } catch (error) {
     throw new Error(extractErrorMessage(error, "Failed to submit job description text."));
+  }
+}
+
+export async function analyzeResumeStructured(resumeId) {
+  try {
+    const { data } = await client.post("/api/resume/analyze", { resume_id: resumeId });
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to analyze resume."));
+  }
+}
+
+export async function analyzeJobDescription(jobId) {
+  try {
+    const { data } = await client.post("/api/jobs/analyze", { job_id: jobId });
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to analyze job description."));
   }
 }
 

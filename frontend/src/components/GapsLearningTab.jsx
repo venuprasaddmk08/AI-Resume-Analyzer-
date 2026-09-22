@@ -1,7 +1,7 @@
 import { Search, Hammer, ListChecks } from "lucide-react";
 import { learningRoadmapFor, priorityLabel, sortByPriority } from "../utils/deriveInsights";
 
-export default function GapsLearningTab({ matches }) {
+export default function GapsLearningTab({ matches, audience = "seeker" }) {
   const gaps = sortByPriority(matches.filter((m) => m.status === "GAP"));
 
   if (gaps.length === 0) {
@@ -16,7 +16,7 @@ export default function GapsLearningTab({ matches }) {
       </p>
       <div className="gap-cards">
         {gaps.map((gap, i) => {
-          const roadmap = learningRoadmapFor(gap);
+          const roadmap = learningRoadmapFor(gap, audience);
           return (
             <div className="gap-card" key={i}>
               <div className="gap-card-head">

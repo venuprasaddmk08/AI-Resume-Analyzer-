@@ -23,13 +23,14 @@ export function sortByPriority(matches) {
 // A fixed, generic 3-step sequence template — not specific to any skill's
 // real learning path (that's Phase 7 scope). Presented honestly as a
 // generic starting point, not a personalized curriculum.
-export function learningRoadmapFor(gapMatch) {
+export function learningRoadmapFor(gapMatch, audience = "seeker") {
   const skill = gapMatch.canonical_skill;
+  const possessive = audience === "provider" ? "their" : "your";
   return {
     skill,
     priority: gapMatch.priority,
     searchTerms: [`beginner ${skill} tutorial`, `${skill} crash course`, `${skill} practice project ideas`],
-    practiceProject: `Build a small project that specifically applies ${skill}, then describe it on your resume with a concrete outcome.`,
+    practiceProject: `Build a small project that specifically applies ${skill}, then describe it on ${possessive} resume with a concrete outcome.`,
     steps: ["Learn the fundamentals", "Follow a guided tutorial or course", "Apply it in a small practice project"],
   };
 }
