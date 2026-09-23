@@ -109,7 +109,7 @@ def generate_structured(
                     config=genai_types.GenerateContentConfig(
                         system_instruction=system_prompt,
                         response_mime_type="application/json",
-                        temperature=0.1,
+                        temperature=0.0,
                     ),
                 )
                 break
