@@ -17,6 +17,7 @@ from openai import (
     APIConnectionError,
     APIError,
     APITimeoutError,
+    BadRequestError,
     OpenAI,
     RateLimitError,
 )
@@ -61,6 +62,24 @@ def is_ai_available() -> bool:
     return get_settings().ai_available
 
 
+def _create_completion(client: OpenAI, *, model: str, messages: list[dict[str, str]], disable_fallback: bool):
+    kwargs: dict = {
+        "model": model,
+        "messages": messages,
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1,
+    }
+    if disable_fallback:
+        # Without this, OpenRouter's free-tier pool can silently
+        # substitute a completely unrelated model (seen in practice: a
+        # content-safety classifier that returns "User Safety: safe"
+        # instead of JSON) when the requested one is momentarily
+        # saturated. That wastes a full round-trip on a response that
+        # can never validate, then burns a repair attempt on top.
+        kwargs["extra_body"] = {"provider": {"allow_fallbacks": False}}
+    return client.chat.completions.create(**kwargs)
+
+
 def generate_structured(
     *,
     system_prompt: str,
@@ -90,21 +109,21 @@ def generate_structured(
 
     for attempt in range(max_repair_attempts + 1):
         try:
-            response = client.chat.completions.create(
-                model=settings.openrouter_model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.1,
-                # Without this, OpenRouter's free-tier pool can silently
-                # substitute a completely unrelated model (seen in
-                # practice: a content-safety classifier that returns
-                # "User Safety: safe" instead of JSON) when the requested
-                # one is momentarily saturated. That wastes a full
-                # round-trip on a response that can never validate, then
-                # burns a repair attempt on top. Disabling fallback makes
-                # an unavailable model fail fast and honestly instead.
-                extra_body={"provider": {"allow_fallbacks": False}},
-            )
+            try:
+                response = _create_completion(
+                    client, model=settings.openrouter_model, messages=messages, disable_fallback=True
+                )
+            except BadRequestError as exc:
+                # Some models/providers reject the allow_fallbacks
+                # request option outright (a 400, a malformed-request
+                # error — not the 429/502 OpenRouter normally returns
+                # for "no provider available"). Retry once without it
+                # rather than treating an unsupported request option as
+                # a hard AI failure.
+                logger.warning("OpenRouter rejected fallback-disable option (%s); retrying without it.", exc)
+                response = _create_completion(
+                    client, model=settings.openrouter_model, messages=messages, disable_fallback=False
+                )
         except (APITimeoutError, APIConnectionError, RateLimitError, APIError) as exc:
             logger.warning("OpenRouter provider error: %s", type(exc).__name__)
             raise AIUnavailableError(f"AI provider error: {type(exc).__name__}") from exc

@@ -134,6 +134,18 @@ def test_certifications_component_partial_match_regardless_of_casing():
     assert component.score == 50.0
 
 
+def test_certifications_component_insufficient_when_jd_analysis_failed():
+    # An empty certifications list means "the JD doesn't ask for this"
+    # ONLY when AI analysis actually ran. When it failed entirely, an
+    # empty list just means nothing was ever extracted — it must not be
+    # read as "vacuously satisfied" (100%), which is a different claim.
+    jd = JDAnalysis(certifications=[], ai_used=False)
+    resume = ResumeAnalysis(certifications=[])
+    component = scoring_engine._certifications_component(jd, resume)
+    assert component.score is None
+    assert component.insufficient_evidence is True
+
+
 # ---------------------------------------------------------------------------
 # Education component
 # ---------------------------------------------------------------------------
@@ -152,6 +164,14 @@ def test_education_component_required_but_none_listed_is_zero():
     resume = ResumeAnalysis(education=[])
     component = scoring_engine._education_component(jd, resume)
     assert component.score == 0.0
+
+
+def test_education_component_insufficient_when_jd_analysis_failed():
+    jd = JDAnalysis(education_requirements=None, ai_used=False)
+    resume = ResumeAnalysis(education=[])
+    component = scoring_engine._education_component(jd, resume)
+    assert component.score is None
+    assert component.insufficient_evidence is True
 
 
 def test_education_component_insufficient_when_semantic_model_unavailable(monkeypatch):
@@ -265,6 +285,24 @@ def test_compute_score_renormalizes_to_the_only_determinate_components():
     used_weight = 0.10 + 0.10  # only certifications + education contributed
     expected = round((0.0 * 0.10 + 100.0 * 0.10) / used_weight, 1)
     assert breakdown.overall_score == expected == 50.0
+
+
+def test_compute_score_overall_is_none_when_jd_analysis_entirely_failed():
+    # When JD structured analysis fails outright, every field on the
+    # fallback JDAnalysis is empty (not because the JD genuinely requires
+    # nothing, but because nothing was ever extracted) and there are zero
+    # requirement matches. The overall score must reflect "we don't know"
+    # (None), never a fabricated 100 from certifications/education wrongly
+    # reading "empty" as "vacuously satisfied."
+    jd = JDAnalysis(ai_used=False)
+    resume = ResumeAnalysis()
+
+    breakdown = scoring_engine.compute_score(jd, resume, [])
+
+    assert breakdown.overall_score is None
+    for component in breakdown.component_scores.values():
+        assert component.score is None
+        assert component.insufficient_evidence is True
 
 
 def test_compute_score_overall_is_none_when_nothing_at_all_is_determinate(monkeypatch):

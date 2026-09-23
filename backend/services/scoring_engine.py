@@ -102,6 +102,13 @@ def _evidence_backed_component(matches: list[RequirementMatch], relevant_types: 
 
 
 def _certifications_component(jd: JDAnalysis, resume: ResumeAnalysis) -> ComponentScore:
+    if not jd.ai_used:
+        return ComponentScore(
+            score=None,
+            insufficient_evidence=True,
+            detail="Job description structured analysis was unavailable, so required certifications could not be determined.",
+        )
+
     if not jd.certifications:
         return ComponentScore(
             score=100.0,
@@ -121,6 +128,13 @@ def _certifications_component(jd: JDAnalysis, resume: ResumeAnalysis) -> Compone
 
 
 def _education_component(jd: JDAnalysis, resume: ResumeAnalysis) -> ComponentScore:
+    if not jd.ai_used:
+        return ComponentScore(
+            score=None,
+            insufficient_evidence=True,
+            detail="Job description structured analysis was unavailable, so education requirements could not be determined.",
+        )
+
     if not jd.education_requirements:
         return ComponentScore(
             score=100.0,

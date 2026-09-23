@@ -4,11 +4,19 @@ per the testing rules, AI behavior is verified against mocked responses only."""
 import json
 from types import SimpleNamespace
 
+import httpx
 import pytest
+from openai import BadRequestError
 from pydantic import BaseModel
 
 import services.ai_client as ai_client
 from services.ai_client import AIUnavailableError, generate_structured
+
+
+def _bad_request_error(message: str = "unsupported request option") -> BadRequestError:
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    return BadRequestError(message, response=response, body=None)
 
 
 class _DummySchema(BaseModel):
@@ -105,6 +113,45 @@ def test_disables_openrouter_fallback_to_unrelated_models(monkeypatch):
     generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
 
     assert captured_kwargs["extra_body"] == {"provider": {"allow_fallbacks": False}}
+
+
+def test_retries_without_fallback_disable_on_bad_request_error(monkeypatch):
+    """Some models/providers reject the allow_fallbacks request option
+    outright (a genuine 400, not a saturation error). That must not be
+    treated as a hard AI failure — retry once without the option instead
+    of giving up on a model that simply doesn't support it."""
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    calls = []
+
+    def fake_create(**kwargs):
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise _bad_request_error()
+        return _fake_response(json.dumps({"value": "hello"}))
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+    assert result.value == "hello"
+    assert len(calls) == 2
+    assert "extra_body" in calls[0]
+    assert "extra_body" not in calls[1]
+
+
+def test_gives_up_if_bad_request_error_persists_without_fallback_disable(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    def always_bad_request(**kwargs):
+        raise _bad_request_error()
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=always_bad_request)))
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    with pytest.raises(AIUnavailableError):
+        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
 
 
 def test_provider_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
