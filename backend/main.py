@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -5,12 +7,24 @@ import models  # noqa: F401 - ensures models are registered on Base before creat
 from api import analysis, jobs, resume
 from config import get_settings
 from database import Base, engine
+from services import semantic_matcher
 
 settings = get_settings()
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="AI Resume & Career Intelligence Platform")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Starts the local semantic-similarity model downloading/loading in
+    # the background right away, so it has the time between server boot
+    # and a user's first analysis request to finish — rather than only
+    # starting on that first request and racing its own timeout budget.
+    semantic_matcher.start_background_load()
+    yield
+
+
+app = FastAPI(title="AI Resume & Career Intelligence Platform", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

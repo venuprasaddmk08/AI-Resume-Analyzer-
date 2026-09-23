@@ -40,6 +40,21 @@ _load_thread: Optional[threading.Thread] = None
 _load_result: dict = {}
 
 
+def start_background_load() -> None:
+    """Kicks off the model load in the background without waiting on it.
+    Call this once at server startup so the model has the whole time
+    between boot and a user's first real request to finish downloading —
+    instead of being bounded by whichever request happens to arrive
+    first's own 8-second budget, which is what makes a slow first-time
+    download show up as "unavailable" on an otherwise-working setup."""
+    global _load_thread
+    with _lock:
+        if _terminal or _load_thread is not None:
+            return
+        _load_thread = threading.Thread(target=_load_into_result, daemon=True)
+        _load_thread.start()
+
+
 def is_available() -> bool:
     _ensure_loaded()
     return _model is not None

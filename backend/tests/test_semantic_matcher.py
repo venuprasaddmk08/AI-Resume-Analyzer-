@@ -94,6 +94,53 @@ def test_later_call_recovers_once_the_slow_background_load_finishes(monkeypatch)
     assert semantic_matcher.unavailable_reason() is None
 
 
+def test_start_background_load_lets_a_later_call_skip_the_wait(monkeypatch):
+    """start_background_load() (called at server startup) kicks off the
+    load without blocking. A later call to is_available() should just
+    rejoin that already-running thread instead of starting a second one,
+    so the model gets the time between server boot and the first request
+    to finish, rather than only starting on that first request."""
+    import threading
+
+    _reset_load_state(monkeypatch)
+    construct_calls = {"n": 0}
+    fake_model = object()
+
+    def fast_construct(*args, **kwargs):
+        construct_calls["n"] += 1
+        return fake_model
+
+    import sentence_transformers
+
+    monkeypatch.setattr(sentence_transformers, "SentenceTransformer", fast_construct)
+
+    semantic_matcher.start_background_load()
+    assert semantic_matcher._load_thread is not None
+
+    semantic_matcher._load_thread.join(timeout=5)  # simulates time passing before the first request
+    assert semantic_matcher.is_available() is True
+    assert construct_calls["n"] == 1
+
+
+def test_start_background_load_is_a_no_op_once_already_started(monkeypatch):
+    _reset_load_state(monkeypatch)
+
+    def hang(*args, **kwargs):
+        import time
+
+        time.sleep(5)
+
+    import sentence_transformers
+
+    monkeypatch.setattr(sentence_transformers, "SentenceTransformer", hang)
+
+    semantic_matcher.start_background_load()
+    first_thread = semantic_matcher._load_thread
+
+    semantic_matcher.start_background_load()
+    assert semantic_matcher._load_thread is first_thread
+
+
 def test_embed_texts_returns_none_for_empty_input(monkeypatch):
     monkeypatch.setattr(semantic_matcher, "_terminal", True)
     monkeypatch.setattr(semantic_matcher, "_model", None)
