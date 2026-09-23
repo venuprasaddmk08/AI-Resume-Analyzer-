@@ -95,6 +95,15 @@ def generate_structured(
                 messages=messages,
                 response_format={"type": "json_object"},
                 temperature=0.1,
+                # Without this, OpenRouter's free-tier pool can silently
+                # substitute a completely unrelated model (seen in
+                # practice: a content-safety classifier that returns
+                # "User Safety: safe" instead of JSON) when the requested
+                # one is momentarily saturated. That wastes a full
+                # round-trip on a response that can never validate, then
+                # burns a repair attempt on top. Disabling fallback makes
+                # an unavailable model fail fast and honestly instead.
+                extra_body={"provider": {"allow_fallbacks": False}},
             )
         except (APITimeoutError, APIConnectionError, RateLimitError, APIError) as exc:
             logger.warning("OpenRouter provider error: %s", type(exc).__name__)

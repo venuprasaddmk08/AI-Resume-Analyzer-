@@ -85,6 +85,28 @@ def test_gives_up_after_max_repair_attempts(monkeypatch):
         generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
 
 
+def test_disables_openrouter_fallback_to_unrelated_models(monkeypatch):
+    """Without this, OpenRouter's free-tier pool can silently substitute a
+    completely unrelated model when the requested one is saturated (seen
+    in practice: a content-safety classifier returning "User Safety:
+    safe" instead of JSON), wasting a round-trip on a response that can
+    never validate. The request must explicitly disable that fallback."""
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    captured_kwargs = {}
+
+    def fake_create(**kwargs):
+        captured_kwargs.update(kwargs)
+        return _fake_response(json.dumps({"value": "hello"}))
+
+    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+    assert captured_kwargs["extra_body"] == {"provider": {"allow_fallbacks": False}}
+
+
 def test_provider_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
