@@ -18,8 +18,8 @@ guessing — the app never fabricates a fact about a candidate.
 ## Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite, PyMuPDF/python-docx for parsing,
-  Sentence Transformers for local semantic matching, and the OpenAI SDK
-  against [Groq](https://groq.com) for AI-assisted extraction/generation.
+  Sentence Transformers for local semantic matching, and the Google Gen AI
+  SDK (Gemini) for AI-assisted extraction/generation.
 - **Frontend**: React + Vite (JavaScript), axios, recharts, lucide-react.
 
 ## Setup
@@ -34,10 +34,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `backend/.env` and fill in `GROQ_API_KEY` (get one free at
-https://console.groq.com/keys) to enable live AI features. Leaving it blank,
-or setting `DEMO_MODE=true`, runs the app fully in its deterministic
-fallback mode — useful for development without a key.
+Edit `backend/.env` and fill in `GOOGLE_API_KEY` (get one free, no billing
+required, at https://aistudio.google.com/apikey) to enable live AI features.
+Leaving it blank, or setting `DEMO_MODE=true`, runs the app fully in its
+deterministic fallback mode — useful for development without a key.
 
 ```bash
 uvicorn main:app --reload

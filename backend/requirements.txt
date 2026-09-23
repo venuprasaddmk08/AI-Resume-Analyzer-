@@ -9,5 +9,5 @@ pytest==8.3.4
 pymupdf==1.28.2
 python-docx==1.2.0
 python-multipart==0.0.20
-openai==3.17.0
+google-genai==1.35.0
 sentence-transformers==6.1.0

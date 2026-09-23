@@ -1,10 +1,11 @@
-"""Tests for the centralized AI client. These never call the real Groq API —
+"""Tests for the centralized AI client. These never call the real Gemini API —
 per the testing rules, AI behavior is verified against mocked responses only."""
 
 import json
 from types import SimpleNamespace
 
 import pytest
+from google.genai import errors as genai_errors
 from pydantic import BaseModel
 
 import services.ai_client as ai_client
@@ -16,13 +17,17 @@ class _DummySchema(BaseModel):
 
 
 class _FakeSettings:
-    def __init__(self, ai_available=True, groq_model="test-model"):
+    def __init__(self, ai_available=True, gemini_model="test-model"):
         self.ai_available = ai_available
-        self.groq_model = groq_model
+        self.gemini_model = gemini_model
 
 
-def _fake_response(content: str):
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+def _fake_response(text: str):
+    return SimpleNamespace(text=text)
+
+
+def _fake_client(create_fn):
+    return SimpleNamespace(models=SimpleNamespace(generate_content=create_fn))
 
 
 def test_raises_when_ai_not_available(monkeypatch):
@@ -35,13 +40,7 @@ def test_raises_when_ai_not_available(monkeypatch):
 def test_returns_validated_model_on_success(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(
-            completions=SimpleNamespace(
-                create=lambda **kwargs: _fake_response(json.dumps({"value": "hello"}))
-            )
-        )
-    )
+    fake_client = _fake_client(lambda **kwargs: _fake_response(json.dumps({"value": "hello"})))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
@@ -54,9 +53,7 @@ def test_unwraps_markdown_code_fence(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     fenced = "```json\n" + json.dumps({"value": "hello"}) + "\n```"
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: _fake_response(fenced)))
-    )
+    fake_client = _fake_client(lambda **kwargs: _fake_response(fenced))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
@@ -78,7 +75,7 @@ def test_repairs_malformed_json_on_retry(monkeypatch):
         call_count["n"] += 1
         return response
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    fake_client = _fake_client(fake_create)
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
@@ -90,17 +87,15 @@ def test_repairs_malformed_json_on_retry(monkeypatch):
 def test_gives_up_after_max_repair_attempts(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: _fake_response("still not json")))
-    )
+    fake_client = _fake_client(lambda **kwargs: _fake_response("still not json"))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     with pytest.raises(AIUnavailableError):
         generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
 
 
-def test_sends_configured_model_and_json_mode(monkeypatch):
-    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings(groq_model="llama-test"))
+def test_sends_configured_model_and_json_mime_type(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings(gemini_model="gemini-test"))
 
     captured_kwargs = {}
 
@@ -108,24 +103,37 @@ def test_sends_configured_model_and_json_mode(monkeypatch):
         captured_kwargs.update(kwargs)
         return _fake_response(json.dumps({"value": "hello"}))
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    fake_client = _fake_client(fake_create)
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
-    generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+    generate_structured(system_prompt="be precise", user_prompt="do the thing", schema=_DummySchema)
 
-    assert captured_kwargs["model"] == "llama-test"
-    assert captured_kwargs["response_format"] == {"type": "json_object"}
-    assert captured_kwargs["messages"][0] == {"role": "system", "content": "sys"}
-    assert captured_kwargs["messages"][1] == {"role": "user", "content": "user"}
+    assert captured_kwargs["model"] == "gemini-test"
+    assert captured_kwargs["contents"] == "do the thing"
+    assert captured_kwargs["config"].system_instruction == "be precise"
+    assert captured_kwargs["config"].response_mime_type == "application/json"
 
 
-def test_provider_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
+def test_provider_api_error_raises_ai_unavailable(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    def raising_create(**kwargs):
+        raise genai_errors.APIError(code=429, response_json={"error": {"message": "rate limited"}})
+
+    fake_client = _fake_client(raising_create)
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    with pytest.raises(AIUnavailableError):
+        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+
+def test_unexpected_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     def raising_create(**kwargs):
         raise RuntimeError("simulated provider outage")
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=raising_create)))
+    fake_client = _fake_client(raising_create)
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     with pytest.raises(AIUnavailableError):

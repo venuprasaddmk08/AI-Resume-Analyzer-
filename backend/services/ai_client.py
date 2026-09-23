@@ -1,4 +1,4 @@
-"""Centralized AI client (Groq, via the OpenAI-compatible SDK).
+"""Centralized AI client (Google's Gemini API).
 
 Every AI call in the app must go through generate_structured() so that
 model selection, timeouts, retries, JSON-schema validation, and the
@@ -13,13 +13,9 @@ import json
 import logging
 from typing import Optional, Type, TypeVar
 
-from openai import (
-    APIConnectionError,
-    APIError,
-    APITimeoutError,
-    OpenAI,
-    RateLimitError,
-)
+from google import genai
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 from pydantic import BaseModel, ValidationError
 
 from config import get_settings
@@ -36,10 +32,10 @@ UNTRUSTED_DOCUMENT_NOTICE = (
 
 
 def _strip_markdown_fence(raw: str) -> str:
-    """Every system prompt already asks for "JSON only". response_format
-    json_object should make this unnecessary on Groq, but stripping a
-    stray ```json fence here — if the model ever adds one — is cheap
-    insurance against a needless validation failure."""
+    """Every system prompt already asks for "JSON only", and
+    response_mime_type="application/json" should make this unnecessary,
+    but stripping a stray ```json fence here is cheap insurance against
+    a needless validation failure."""
     text = raw.strip()
     if text.startswith("```"):
         lines = text.splitlines()
@@ -58,18 +54,14 @@ class AIUnavailableError(Exception):
     gracefully — it must never propagate into a 500 that crashes the API."""
 
 
-_client: Optional[OpenAI] = None
+_client: Optional[genai.Client] = None
 
 
-def _get_client() -> OpenAI:
+def _get_client() -> genai.Client:
     global _client
     if _client is None:
         settings = get_settings()
-        _client = OpenAI(
-            api_key=settings.groq_api_key,
-            base_url=settings.groq_base_url,
-            timeout=30.0,
-        )
+        _client = genai.Client(api_key=settings.google_api_key)
     return _client
 
 
@@ -94,32 +86,32 @@ def generate_structured(
     """
     settings = get_settings()
     if not settings.ai_available:
-        raise AIUnavailableError("AI is not configured (missing GROQ_API_KEY or DEMO_MODE is on).")
+        raise AIUnavailableError("AI is not configured (missing GOOGLE_API_KEY or DEMO_MODE is on).")
 
     client = _get_client()
-    messages: list[dict[str, str]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
+    contents = user_prompt
 
     last_error = "AI response could not be validated."
 
     for attempt in range(max_repair_attempts + 1):
         try:
-            response = client.chat.completions.create(
-                model=settings.groq_model,
-                messages=messages,
-                response_format={"type": "json_object"},
-                temperature=0.1,
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=contents,
+                config=genai_types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    response_mime_type="application/json",
+                    temperature=0.1,
+                ),
             )
-        except (APITimeoutError, APIConnectionError, RateLimitError, APIError) as exc:
-            logger.warning("Groq provider error: %s", type(exc).__name__)
+        except genai_errors.APIError as exc:
+            logger.warning("Gemini provider error: %s (code %s)", type(exc).__name__, getattr(exc, "code", "?"))
             raise AIUnavailableError(f"AI provider error: {type(exc).__name__}") from exc
         except Exception as exc:  # never let an unexpected SDK error crash the request
             logger.warning("Unexpected AI client error: %s", type(exc).__name__)
             raise AIUnavailableError("Unexpected AI client error.") from exc
 
-        raw = response.choices[0].message.content or ""
+        raw = response.text or ""
         logger.warning("RAW AI RESPONSE: %r", raw)
 
         try:
@@ -129,16 +121,12 @@ def generate_structured(
             last_error = f"AI response did not match the expected schema: {exc}"
             logger.warning("AI JSON validation failed on attempt %d: %s", attempt, exc)
             if attempt < max_repair_attempts:
-                messages.append({"role": "assistant", "content": raw})
-                messages.append(
-                    {
-                        "role": "user",
-                        "content": (
-                            "That response was not valid JSON matching the required schema. "
-                            "Return ONLY a corrected JSON object matching the schema. "
-                            "Do not change the underlying facts, only fix the JSON structure."
-                        ),
-                    }
+                contents = (
+                    f"{user_prompt}\n\n"
+                    f"Your previous response was:\n{raw}\n\n"
+                    "That response was not valid JSON matching the required schema. "
+                    "Return ONLY a corrected JSON object matching the schema. "
+                    "Do not change the underlying facts, only fix the JSON structure."
                 )
                 continue
 
