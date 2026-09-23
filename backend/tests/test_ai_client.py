@@ -116,15 +116,81 @@ def test_sends_configured_model_and_json_mime_type(monkeypatch):
 
 def test_provider_api_error_raises_ai_unavailable(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+    monkeypatch.setattr(ai_client.time, "sleep", lambda seconds: None)
 
     def raising_create(**kwargs):
-        raise genai_errors.APIError(code=429, response_json={"error": {"message": "rate limited"}})
+        raise genai_errors.APIError(code=400, response_json={"error": {"message": "bad request"}})
 
     fake_client = _fake_client(raising_create)
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     with pytest.raises(AIUnavailableError):
         generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+
+def test_non_transient_error_does_not_retry(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+    monkeypatch.setattr(ai_client.time, "sleep", lambda seconds: None)
+
+    call_count = {"n": 0}
+
+    def raising_create(**kwargs):
+        call_count["n"] += 1
+        raise genai_errors.APIError(code=404, response_json={"error": {"message": "not found"}})
+
+    fake_client = _fake_client(raising_create)
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    with pytest.raises(AIUnavailableError):
+        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+    assert call_count["n"] == 1
+
+
+def test_transient_error_retries_then_succeeds(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    sleep_calls = []
+    monkeypatch.setattr(ai_client.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    call_count = {"n": 0}
+
+    def flaky_create(**kwargs):
+        call_count["n"] += 1
+        if call_count["n"] < 2:
+            raise genai_errors.APIError(code=503, response_json={"error": {"message": "overloaded"}})
+        return _fake_response(json.dumps({"value": "recovered"}))
+
+    fake_client = _fake_client(flaky_create)
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+    assert result.value == "recovered"
+    assert call_count["n"] == 2
+    assert sleep_calls == [1]
+
+
+def test_transient_error_exhausts_retries_then_raises(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    sleep_calls = []
+    monkeypatch.setattr(ai_client.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+
+    call_count = {"n": 0}
+
+    def raising_create(**kwargs):
+        call_count["n"] += 1
+        raise genai_errors.APIError(code=503, response_json={"error": {"message": "overloaded"}})
+
+    fake_client = _fake_client(raising_create)
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    with pytest.raises(AIUnavailableError):
+        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
+    assert call_count["n"] == 3
+    assert sleep_calls == [1, 2]
 
 
 def test_unexpected_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
