@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -53,6 +54,31 @@ def _ensure_job_analyzed(job: JobDescription, db: Session) -> JDAnalysis:
     return analysis
 
 
+def _ensure_both_analyzed(resume: Resume, job: JobDescription, db: Session) -> tuple[ResumeAnalysis, JDAnalysis]:
+    """When neither has been analyzed yet, runs the resume and job AI
+    structured-analysis calls concurrently instead of sequentially —
+    they're independent, so this roughly halves the wall-clock wait on a
+    first-time resume/JD pair, which is the common case for /run. Only
+    the pure AI calls run in the background threads; all db reads/writes
+    stay on the calling thread since SQLAlchemy sessions aren't safe to
+    share across threads."""
+    if resume.analysis is None and job.analysis is None:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            resume_future = executor.submit(analyze_resume, resume.normalized_text)
+            job_future = executor.submit(analyze_job_description, job.normalized_text)
+            resume_analysis = resume_future.result()
+            jd_analysis = job_future.result()
+
+        resume.analysis = resume_analysis.model_dump(mode="json")
+        resume.analyzed_at = datetime.now(timezone.utc)
+        job.analysis = jd_analysis.model_dump(mode="json")
+        job.analyzed_at = datetime.now(timezone.utc)
+        db.commit()
+        return resume_analysis, jd_analysis
+
+    return _ensure_resume_analyzed(resume, db), _ensure_job_analyzed(job, db)
+
+
 def _analysis_to_response(analysis: Analysis, role_title: str | None = None) -> AnalysisResponse:
     return AnalysisResponse(
         analysis_id=analysis.id,
@@ -78,8 +104,7 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
     if job is None:
         raise HTTPException(status_code=404, detail=f"No job description found with id {payload.job_id}.")
 
-    resume_analysis = _ensure_resume_analyzed(resume, db)
-    jd_analysis = _ensure_job_analyzed(job, db)
+    resume_analysis, jd_analysis = _ensure_both_analyzed(resume, job, db)
 
     warnings: list[str] = []
     if not resume_analysis.ai_used:

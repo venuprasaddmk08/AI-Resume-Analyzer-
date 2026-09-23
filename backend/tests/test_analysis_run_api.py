@@ -111,6 +111,40 @@ def test_get_analysis_returns_404_for_unknown_id():
     assert response.status_code == 404
 
 
+def test_run_analyzes_resume_and_job_concurrently_when_both_uncached(monkeypatch):
+    """The resume and JD AI structured-analysis calls are independent, so
+    when neither has been analyzed yet (the common first-time-pair case),
+    they should run concurrently instead of one waiting on the other.
+    Uses a two-party barrier: both calls only complete once BOTH have
+    started, so if they ran sequentially this would time out instead of
+    the endpoint succeeding."""
+    import threading
+
+    resume_id = _upload_resume()
+    job_id = _create_job()
+
+    barrier = threading.Barrier(2, timeout=2)
+
+    def slow_analyze_resume(text):
+        barrier.wait()
+        return ResumeAnalysis(skills=[])
+
+    def slow_analyze_job(text):
+        barrier.wait()
+        return JDAnalysis(required_skills=["Python"])
+
+    monkeypatch.setattr(analysis_api, "analyze_resume", slow_analyze_resume)
+    monkeypatch.setattr(analysis_api, "analyze_job_description", slow_analyze_job)
+
+    import services.evidence_engine as evidence_engine
+
+    monkeypatch.setattr(evidence_engine, "semantic_model_available", lambda: False)
+
+    response = client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
+
+    assert response.status_code == 200
+
+
 def test_run_calls_evidence_engine_with_ai_refinement_disabled(monkeypatch):
     """The /run endpoint must return a fast baseline: it should never pay for
     the per-PARTIAL-match AI adjudication call inside the request that the

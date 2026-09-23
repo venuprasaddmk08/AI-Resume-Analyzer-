@@ -1,12 +1,32 @@
 import { useState } from "react";
-import { LayoutDashboard, ListChecks, GraduationCap, MessagesSquare, UserSquare2, UserPlus, ChevronLeft } from "lucide-react";
+import {
+  LayoutDashboard,
+  ListChecks,
+  GraduationCap,
+  MessagesSquare,
+  UserSquare2,
+  UserPlus,
+  ChevronLeft,
+  Compass,
+  HeartPulse,
+  ScanSearch,
+  Globe2,
+} from "lucide-react";
 import OverviewTab from "../OverviewTab";
 import SkillsTab from "../SkillsTab";
 import GapsLearningTab from "../GapsLearningTab";
 import InterviewTab from "../InterviewTab";
+import CareerIntelligenceTab from "../CareerIntelligenceTab";
+import ResumeIntelligenceTab from "../ResumeIntelligenceTab";
+import AtsRecruiterTab from "../AtsRecruiterTab";
+import ExternalEvidenceTab from "../ExternalEvidenceTab";
 import CandidateProfileSummary from "./CandidateProfileSummary";
 import CandidateList from "./CandidateList";
 import useAnalysisInsights from "../../hooks/useAnalysisInsights";
+import useCareerIntelligence from "../../hooks/useCareerIntelligence";
+import useResumeIntelligence from "../../hooks/useResumeIntelligence";
+import useAtsRecruiterView from "../../hooks/useAtsRecruiterView";
+import useExternalEvidence from "../../hooks/useExternalEvidence";
 
 const TABS = [
   { id: "profile", label: "Profile", icon: UserSquare2 },
@@ -14,6 +34,10 @@ const TABS = [
   { id: "skills", label: "Skills & Evidence", icon: ListChecks },
   { id: "gaps", label: "Skill Gaps & Learning", icon: GraduationCap },
   { id: "interview", label: "Interview Prep", icon: MessagesSquare },
+  { id: "career", label: "Career Intelligence", icon: Compass },
+  { id: "resume-health", label: "Resume Intelligence", icon: HeartPulse },
+  { id: "ats", label: "ATS / Recruiter View", icon: ScanSearch },
+  { id: "external", label: "External Evidence", icon: Globe2 },
 ];
 
 export default function CandidateFitness({ candidates, selectedId, onSelectCandidate, onAddCandidate, onChangeJd, jdRoleTitle }) {
@@ -28,6 +52,10 @@ export default function CandidateFitness({ candidates, selectedId, onSelectCandi
     analysis.analysis_id,
     insightsEnabled
   );
+  const careerIntelligence = useCareerIntelligence(analysis.resume_id, activeTab === "career");
+  const resumeIntelligence = useResumeIntelligence(analysis.resume_id, activeTab === "resume-health");
+  const atsView = useAtsRecruiterView(analysis.analysis_id, activeTab === "ats");
+  const externalEvidence = useExternalEvidence(analysis.resume_id, activeTab === "external");
 
   return (
     <div className="provider-fitness">
@@ -87,6 +115,30 @@ export default function CandidateFitness({ candidates, selectedId, onSelectCandi
               insights={insights}
               insightsError={insightsError}
               audience="provider"
+            />
+          )}
+          {activeTab === "career" && (
+            <CareerIntelligenceTab
+              status={careerIntelligence.status}
+              data={careerIntelligence.data}
+              error={careerIntelligence.error}
+            />
+          )}
+          {activeTab === "resume-health" && (
+            <ResumeIntelligenceTab
+              resumeId={analysis.resume_id}
+              status={resumeIntelligence.status}
+              data={resumeIntelligence.data}
+              error={resumeIntelligence.error}
+            />
+          )}
+          {activeTab === "ats" && <AtsRecruiterTab status={atsView.status} data={atsView.data} error={atsView.error} />}
+          {activeTab === "external" && (
+            <ExternalEvidenceTab
+              resumeId={analysis.resume_id}
+              status={externalEvidence.status}
+              data={externalEvidence.data}
+              error={externalEvidence.error}
             />
           )}
         </div>
