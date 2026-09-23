@@ -36,9 +36,14 @@ def _ensure_resume_analyzed(resume: Resume, db: Session) -> ResumeAnalysis:
         return ResumeAnalysis.model_validate(resume.analysis)
 
     analysis = analyze_resume(resume.normalized_text)
-    resume.analysis = analysis.model_dump(mode="json")
-    resume.analyzed_at = datetime.now(timezone.utc)
-    db.commit()
+    if analysis.ai_used:
+        # Only cache a successful AI result. Caching the deterministic
+        # fallback would permanently lock this resume into "AI
+        # unavailable" even after a transient provider failure clears -
+        # every future request should get a fresh attempt instead.
+        resume.analysis = analysis.model_dump(mode="json")
+        resume.analyzed_at = datetime.now(timezone.utc)
+        db.commit()
     return analysis
 
 
@@ -47,9 +52,10 @@ def _ensure_job_analyzed(job: JobDescription, db: Session) -> JDAnalysis:
         return JDAnalysis.model_validate(job.analysis)
 
     analysis = analyze_job_description(job.normalized_text)
-    job.analysis = analysis.model_dump(mode="json")
-    job.analyzed_at = datetime.now(timezone.utc)
-    db.commit()
+    if analysis.ai_used:
+        job.analysis = analysis.model_dump(mode="json")
+        job.analyzed_at = datetime.now(timezone.utc)
+        db.commit()
     return analysis
 
 

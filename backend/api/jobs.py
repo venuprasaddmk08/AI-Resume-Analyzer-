@@ -112,13 +112,17 @@ async def analyze_job_description_endpoint(payload: JobAnalyzeRequest, db: Sessi
         raise HTTPException(status_code=404, detail=f"No job description found with id {payload.job_id}.")
 
     analysis = analyze_job_description(job.normalized_text)
+    analyzed_at = datetime.now(timezone.utc)
 
-    job.analysis = analysis.model_dump(mode="json")
-    job.analyzed_at = datetime.now(timezone.utc)
-    db.commit()
+    if analysis.ai_used:
+        # Only cache a successful AI result - see the identical comment
+        # in api/analysis.py for why caching a failure is wrong.
+        job.analysis = analysis.model_dump(mode="json")
+        job.analyzed_at = analyzed_at
+        db.commit()
 
     return JobAnalysisResponse(
         job_id=job.id,
-        analyzed_at=job.analyzed_at,
+        analyzed_at=analyzed_at,
         analysis=analysis,
     )

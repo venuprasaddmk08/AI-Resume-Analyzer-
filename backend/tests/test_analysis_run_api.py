@@ -220,6 +220,36 @@ def test_refine_returns_404_for_unknown_analysis():
     assert response.status_code == 404
 
 
+def test_run_does_not_cache_a_failed_ai_fallback(monkeypatch):
+    """A resume/JD analysis that fell back to the deterministic result
+    (ai_used=False, e.g. after a transient provider outage) must not be
+    permanently cached - otherwise one bad request would lock that
+    resume/job into "AI unavailable" forever, even once the provider
+    recovers. The next /run call should retry AI from scratch."""
+    resume_id = _upload_resume()
+    job_id = _create_job()
+
+    call_count = {"n": 0}
+
+    def flaky_then_ok_analyze_resume(text):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            return ResumeAnalysis(skills=[], ai_used=False, warnings=["AI unavailable"])
+        return ResumeAnalysis(skills=[], ai_used=True)
+
+    monkeypatch.setattr(analysis_api, "analyze_resume", flaky_then_ok_analyze_resume)
+    monkeypatch.setattr(analysis_api, "analyze_job_description", lambda text: JDAnalysis(required_skills=[]))
+
+    import services.evidence_engine as evidence_engine
+
+    monkeypatch.setattr(evidence_engine, "semantic_model_available", lambda: False)
+
+    client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
+    client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
+
+    assert call_count["n"] == 2
+
+
 def test_run_reuses_existing_analysis_instead_of_recomputing(monkeypatch):
     resume_id = _upload_resume()
     job_id = _create_job()

@@ -54,9 +54,12 @@ def _ensure_resume_analyzed(resume: Resume, db: Session) -> ResumeAnalysis:
         return ResumeAnalysis.model_validate(resume.analysis)
 
     analysis = analyze_resume(resume.normalized_text)
-    resume.analysis = analysis.model_dump(mode="json")
-    resume.analyzed_at = datetime.now(timezone.utc)
-    db.commit()
+    if analysis.ai_used:
+        # Only cache a successful AI result - see the identical comment
+        # in api/analysis.py for why caching a failure is wrong.
+        resume.analysis = analysis.model_dump(mode="json")
+        resume.analyzed_at = datetime.now(timezone.utc)
+        db.commit()
     return analysis
 
 
@@ -118,14 +121,18 @@ async def analyze_resume_endpoint(payload: ResumeAnalyzeRequest, db: Session = D
         raise HTTPException(status_code=404, detail=f"No resume found with id {payload.resume_id}.")
 
     analysis = analyze_resume(resume.normalized_text)
+    analyzed_at = datetime.now(timezone.utc)
 
-    resume.analysis = analysis.model_dump(mode="json")
-    resume.analyzed_at = datetime.now(timezone.utc)
-    db.commit()
+    if analysis.ai_used:
+        # Only cache a successful AI result - see the identical comment
+        # in api/analysis.py for why caching a failure is wrong.
+        resume.analysis = analysis.model_dump(mode="json")
+        resume.analyzed_at = analyzed_at
+        db.commit()
 
     return ResumeAnalysisResponse(
         resume_id=resume.id,
-        analyzed_at=resume.analyzed_at,
+        analyzed_at=analyzed_at,
         analysis=analysis,
     )
 
