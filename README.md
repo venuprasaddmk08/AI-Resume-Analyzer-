@@ -18,8 +18,8 @@ guessing — the app never fabricates a fact about a candidate.
 ## Stack
 
 - **Backend**: FastAPI + SQLAlchemy + SQLite, PyMuPDF/python-docx for parsing,
-  Sentence Transformers for local semantic matching, and the OpenAI SDK against
-  [OpenRouter](https://openrouter.ai) for AI-assisted extraction/generation.
+  Sentence Transformers for local semantic matching, and the Anthropic SDK
+  (Claude) for AI-assisted extraction/generation.
 - **Frontend**: React + Vite (JavaScript), axios, recharts, lucide-react.
 
 ## Setup
@@ -34,10 +34,10 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Edit `backend/.env` and fill in `OPENROUTER_API_KEY` (get one free at
-https://openrouter.ai/keys) to enable live AI features. Leaving it blank, or
-setting `DEMO_MODE=true`, runs the app fully in its deterministic fallback mode
-— useful for development without a key.
+Edit `backend/.env` and fill in `ANTHROPIC_API_KEY` (get one at
+https://console.anthropic.com/settings/keys) to enable live AI features.
+Leaving it blank, or setting `DEMO_MODE=true`, runs the app fully in its
+deterministic fallback mode — useful for development without a key.
 
 ```bash
 uvicorn main:app --reload

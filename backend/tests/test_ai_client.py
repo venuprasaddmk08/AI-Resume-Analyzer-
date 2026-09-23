@@ -1,22 +1,24 @@
-"""Tests for the centralized AI client. These never call the real OpenRouter API —
+"""Tests for the centralized AI client. These never call the real Anthropic API —
 per the testing rules, AI behavior is verified against mocked responses only."""
 
 import json
 from types import SimpleNamespace
 
+import anthropic
 import httpx
 import pytest
-from openai import BadRequestError
 from pydantic import BaseModel
 
 import services.ai_client as ai_client
 from services.ai_client import AIUnavailableError, generate_structured
 
 
-def _bad_request_error(message: str = "unsupported request option") -> BadRequestError:
-    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
-    response = httpx.Response(400, request=request)
-    return BadRequestError(message, response=response, body=None)
+def _provider_error(exc_type, message: str = "provider error"):
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    if exc_type is anthropic.APIConnectionError:
+        return exc_type(message=message, request=request)
+    response = httpx.Response(429 if exc_type is anthropic.RateLimitError else 400, request=request)
+    return exc_type(message, response=response, body=None)
 
 
 class _DummySchema(BaseModel):
@@ -24,13 +26,17 @@ class _DummySchema(BaseModel):
 
 
 class _FakeSettings:
-    def __init__(self, ai_available=True, openrouter_model="test-model"):
+    def __init__(self, ai_available=True, anthropic_model="test-model"):
         self.ai_available = ai_available
-        self.openrouter_model = openrouter_model
+        self.anthropic_model = anthropic_model
+
+
+def _text_block(text: str):
+    return SimpleNamespace(type="text", text=text)
 
 
 def _fake_response(content: str):
-    return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+    return SimpleNamespace(content=[_text_block(content)])
 
 
 def test_raises_when_ai_not_available(monkeypatch):
@@ -44,17 +50,28 @@ def test_returns_validated_model_on_success(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     fake_client = SimpleNamespace(
-        chat=SimpleNamespace(
-            completions=SimpleNamespace(
-                create=lambda **kwargs: _fake_response(json.dumps({"value": "hello"}))
-            )
-        )
+        messages=SimpleNamespace(create=lambda **kwargs: _fake_response(json.dumps({"value": "hello"})))
     )
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
 
     assert isinstance(result, _DummySchema)
+    assert result.value == "hello"
+
+
+def test_unwraps_markdown_code_fence(monkeypatch):
+    """Unlike OpenRouter's strict JSON mode, Claude has no hard JSON-only
+    mode and can wrap its output in a ```json fence despite the prompt
+    asking for JSON only. That must still parse successfully."""
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+
+    fenced = "```json\n" + json.dumps({"value": "hello"}) + "\n```"
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=lambda **kwargs: _fake_response(fenced)))
+    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
+
+    result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+
     assert result.value == "hello"
 
 
@@ -72,7 +89,7 @@ def test_repairs_malformed_json_on_retry(monkeypatch):
         call_count["n"] += 1
         return response
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
@@ -85,7 +102,7 @@ def test_gives_up_after_max_repair_attempts(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: _fake_response("still not json")))
+        messages=SimpleNamespace(create=lambda **kwargs: _fake_response("still not json"))
     )
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
@@ -93,13 +110,8 @@ def test_gives_up_after_max_repair_attempts(monkeypatch):
         generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
 
 
-def test_disables_openrouter_fallback_to_unrelated_models(monkeypatch):
-    """Without this, OpenRouter's free-tier pool can silently substitute a
-    completely unrelated model when the requested one is saturated (seen
-    in practice: a content-safety classifier returning "User Safety:
-    safe" instead of JSON), wasting a round-trip on a response that can
-    never validate. The request must explicitly disable that fallback."""
-    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
+def test_sends_system_prompt_and_configured_model(monkeypatch):
+    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings(anthropic_model="claude-test-model"))
 
     captured_kwargs = {}
 
@@ -107,64 +119,45 @@ def test_disables_openrouter_fallback_to_unrelated_models(monkeypatch):
         captured_kwargs.update(kwargs)
         return _fake_response(json.dumps({"value": "hello"}))
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=fake_create))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
-    generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+    generate_structured(system_prompt="be precise", user_prompt="do the thing", schema=_DummySchema)
 
-    assert captured_kwargs["extra_body"] == {"provider": {"allow_fallbacks": False}}
+    assert captured_kwargs["model"] == "claude-test-model"
+    assert captured_kwargs["system"] == "be precise"
+    assert captured_kwargs["messages"][0] == {"role": "user", "content": "do the thing"}
 
 
-def test_retries_without_fallback_disable_or_json_mode_on_bad_request_error(monkeypatch):
-    """Some models/providers reject the allow_fallbacks option or JSON
-    mode (response_format) outright — seen in practice: a free model
-    that flatly doesn't support the "structured-outputs" feature, a
-    genuine 400, not a saturation error. That must not be treated as a
-    hard AI failure — retry once with neither option instead of giving
-    up on a model that simply doesn't support them."""
+@pytest.mark.parametrize("exc_type", [anthropic.APITimeoutError, anthropic.APIConnectionError, anthropic.RateLimitError])
+def test_provider_errors_raise_ai_unavailable_without_retry(monkeypatch, exc_type):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
-    calls = []
+    call_count = {"n": 0}
 
-    def fake_create(**kwargs):
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise _bad_request_error()
-        return _fake_response(json.dumps({"value": "hello"}))
+    def raising_create(**kwargs):
+        call_count["n"] += 1
+        if exc_type is anthropic.APITimeoutError:
+            request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+            raise exc_type(request=request)
+        raise _provider_error(exc_type)
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=fake_create)))
-    monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
-
-    result = generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
-
-    assert result.value == "hello"
-    assert len(calls) == 2
-    assert "extra_body" in calls[0]
-    assert calls[0]["response_format"] == {"type": "json_object"}
-    assert "extra_body" not in calls[1]
-    assert "response_format" not in calls[1]
-
-
-def test_gives_up_if_bad_request_error_persists_without_fallback_disable(monkeypatch):
-    monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
-
-    def always_bad_request(**kwargs):
-        raise _bad_request_error()
-
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=always_bad_request)))
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=raising_create))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     with pytest.raises(AIUnavailableError):
-        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
+        generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema, max_repair_attempts=1)
+
+    assert call_count["n"] == 1
 
 
-def test_provider_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
+def test_unexpected_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     def raising_create(**kwargs):
         raise RuntimeError("simulated provider outage")
 
-    fake_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=raising_create)))
+    fake_client = SimpleNamespace(messages=SimpleNamespace(create=raising_create))
     monkeypatch.setattr(ai_client, "_get_client", lambda: fake_client)
 
     with pytest.raises(AIUnavailableError):
