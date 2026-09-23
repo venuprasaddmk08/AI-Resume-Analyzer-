@@ -62,13 +62,17 @@ def is_ai_available() -> bool:
     return get_settings().ai_available
 
 
-def _create_completion(client: OpenAI, *, model: str, messages: list[dict[str, str]], disable_fallback: bool):
-    kwargs: dict = {
-        "model": model,
-        "messages": messages,
-        "response_format": {"type": "json_object"},
-        "temperature": 0.1,
-    }
+def _create_completion(
+    client: OpenAI,
+    *,
+    model: str,
+    messages: list[dict[str, str]],
+    disable_fallback: bool,
+    use_json_mode: bool,
+):
+    kwargs: dict = {"model": model, "messages": messages, "temperature": 0.1}
+    if use_json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
     if disable_fallback:
         # Without this, OpenRouter's free-tier pool can silently
         # substitute a completely unrelated model (seen in practice: a
@@ -111,18 +115,30 @@ def generate_structured(
         try:
             try:
                 response = _create_completion(
-                    client, model=settings.openrouter_model, messages=messages, disable_fallback=True
+                    client,
+                    model=settings.openrouter_model,
+                    messages=messages,
+                    disable_fallback=True,
+                    use_json_mode=True,
                 )
             except BadRequestError as exc:
-                # Some models/providers reject the allow_fallbacks
-                # request option outright (a 400, a malformed-request
-                # error — not the 429/502 OpenRouter normally returns
-                # for "no provider available"). Retry once without it
-                # rather than treating an unsupported request option as
-                # a hard AI failure.
-                logger.warning("OpenRouter rejected fallback-disable option (%s); retrying without it.", exc)
+                # Some models/providers reject one of the two request
+                # options above outright (a 400, a malformed-request
+                # error — not the 429/502 OpenRouter normally returns for
+                # "no provider available"). Observed in practice: a free
+                # model that doesn't support the "structured-outputs"
+                # (JSON mode) feature at all. Retry once with neither
+                # option rather than treating an unsupported request
+                # shape as a hard AI failure — the system/user prompts
+                # already ask for JSON-only output, so parsing still
+                # works without the strict response_format constraint.
+                logger.warning("OpenRouter rejected the request shape (%s); retrying without it.", exc)
                 response = _create_completion(
-                    client, model=settings.openrouter_model, messages=messages, disable_fallback=False
+                    client,
+                    model=settings.openrouter_model,
+                    messages=messages,
+                    disable_fallback=False,
+                    use_json_mode=False,
                 )
         except (APITimeoutError, APIConnectionError, RateLimitError, APIError) as exc:
             logger.warning("OpenRouter provider error: %s", type(exc).__name__)

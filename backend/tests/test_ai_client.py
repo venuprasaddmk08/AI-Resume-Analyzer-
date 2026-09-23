@@ -115,11 +115,13 @@ def test_disables_openrouter_fallback_to_unrelated_models(monkeypatch):
     assert captured_kwargs["extra_body"] == {"provider": {"allow_fallbacks": False}}
 
 
-def test_retries_without_fallback_disable_on_bad_request_error(monkeypatch):
-    """Some models/providers reject the allow_fallbacks request option
-    outright (a genuine 400, not a saturation error). That must not be
-    treated as a hard AI failure — retry once without the option instead
-    of giving up on a model that simply doesn't support it."""
+def test_retries_without_fallback_disable_or_json_mode_on_bad_request_error(monkeypatch):
+    """Some models/providers reject the allow_fallbacks option or JSON
+    mode (response_format) outright — seen in practice: a free model
+    that flatly doesn't support the "structured-outputs" feature, a
+    genuine 400, not a saturation error. That must not be treated as a
+    hard AI failure — retry once with neither option instead of giving
+    up on a model that simply doesn't support them."""
     monkeypatch.setattr(ai_client, "get_settings", lambda: _FakeSettings())
 
     calls = []
@@ -138,7 +140,9 @@ def test_retries_without_fallback_disable_on_bad_request_error(monkeypatch):
     assert result.value == "hello"
     assert len(calls) == 2
     assert "extra_body" in calls[0]
+    assert calls[0]["response_format"] == {"type": "json_object"}
     assert "extra_body" not in calls[1]
+    assert "response_format" not in calls[1]
 
 
 def test_gives_up_if_bad_request_error_persists_without_fallback_disable(monkeypatch):
