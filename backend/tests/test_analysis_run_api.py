@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 import api.analysis as analysis_api
 from main import app
-from schemas import JDAnalysis, ResumeAnalysis, SkillEvidence
+from schemas import JDAnalysis, RequirementMatch, ResumeAnalysis, SkillEvidence
 
 client = TestClient(app)
 
@@ -108,6 +108,81 @@ def test_score_endpoint_returns_404_for_unknown_analysis():
 
 def test_get_analysis_returns_404_for_unknown_id():
     response = client.get("/api/analysis/999999")
+    assert response.status_code == 404
+
+
+def test_run_calls_evidence_engine_with_ai_refinement_disabled(monkeypatch):
+    """The /run endpoint must return a fast baseline: it should never pay for
+    the per-PARTIAL-match AI adjudication call inside the request that the
+    frontend's loading screen is waiting on."""
+    resume_id = _upload_resume()
+    job_id = _create_job()
+
+    monkeypatch.setattr(analysis_api, "analyze_resume", lambda text: ResumeAnalysis(skills=[]))
+    monkeypatch.setattr(analysis_api, "analyze_job_description", lambda text: JDAnalysis(required_skills=["Python"]))
+
+    captured = {}
+    real_build_requirement_matches = analysis_api.build_requirement_matches
+
+    def _capturing_build_requirement_matches(*args, **kwargs):
+        captured["use_ai_refinement"] = kwargs.get("use_ai_refinement")
+        return real_build_requirement_matches(*args, **kwargs)
+
+    monkeypatch.setattr(analysis_api, "build_requirement_matches", _capturing_build_requirement_matches)
+
+    response = client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
+
+    assert response.status_code == 200
+    assert captured["use_ai_refinement"] is False
+
+
+def test_refine_endpoint_calls_evidence_engine_with_ai_refinement_enabled_and_persists(monkeypatch):
+    resume_id = _upload_resume()
+    job_id = _create_job()
+
+    monkeypatch.setattr(analysis_api, "analyze_resume", lambda text: ResumeAnalysis(skills=[]))
+    monkeypatch.setattr(analysis_api, "analyze_job_description", lambda text: JDAnalysis(required_skills=["Python"]))
+
+    run_response = client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
+    analysis_id = run_response.json()["analysis_id"]
+
+    captured = {}
+    real_build_requirement_matches = analysis_api.build_requirement_matches
+
+    def _capturing_build_requirement_matches(*args, **kwargs):
+        captured["use_ai_refinement"] = kwargs.get("use_ai_refinement")
+        return [
+            RequirementMatch(
+                requirement="Python",
+                canonical_skill="python",
+                priority="MANDATORY",
+                status="MATCH",
+                evidence=[],
+                confidence=0.8,
+                reason="AI confirmed it.",
+                signal="ai_reasoning",
+            )
+        ], True, True
+
+    monkeypatch.setattr(analysis_api, "build_requirement_matches", _capturing_build_requirement_matches)
+
+    refine_response = client.post(f"/api/analysis/{analysis_id}/refine")
+
+    assert refine_response.status_code == 200
+    assert captured["use_ai_refinement"] is True
+    refined_body = refine_response.json()
+    assert refined_body["ai_refinement_used"] is True
+    refined_match = next(m for m in refined_body["matches"] if m["requirement"] == "Python")
+    assert refined_match["status"] == "MATCH"
+    assert refined_match["signal"] == "ai_reasoning"
+
+    # The refined result is persisted, not just returned once.
+    get_response = client.get(f"/api/analysis/{analysis_id}")
+    assert get_response.json()["matches"] == refined_body["matches"]
+
+
+def test_refine_returns_404_for_unknown_analysis():
+    response = client.post("/api/analysis/999999/refine")
     assert response.status_code == 404
 
 

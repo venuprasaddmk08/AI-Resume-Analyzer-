@@ -62,13 +62,14 @@ def test_ai_success_path(monkeypatch):
     assert result.interview_questions[0].based_on == "Python"
 
 
-def test_ai_path_caps_technical_and_project_questions(monkeypatch):
-    matches = [_match(f"Skill{i}", "MATCH") for i in range(8)]
+def test_ai_path_caps_gap_technical_and_project_questions(monkeypatch):
+    matches = [_match(f"Skill{i}", "MATCH") for i in range(8)] + [_match(f"Gap{i}", "GAP") for i in range(8)]
 
     ai_result = _AIInsights(
         learning_roadmap=[],
         interview_questions=(
-            [{"category": "Technical", "question": f"Q{i}", "based_on": f"Skill{i}"} for i in range(8)]
+            [{"category": "Gap-focused", "question": f"G{i}", "based_on": f"Gap{i}"} for i in range(8)]
+            + [{"category": "Technical", "question": f"Q{i}", "based_on": f"Skill{i}"} for i in range(8)]
             + [{"category": "Project", "question": f"P{i}", "based_on": f"Skill{i}"} for i in range(4)]
             + [{"category": "Behavioral", "question": "B", "based_on": None}]
         ),
@@ -78,7 +79,8 @@ def test_ai_path_caps_technical_and_project_questions(monkeypatch):
     result = generate_career_insights(matches, JDAnalysis())
 
     categories = [q.category for q in result.interview_questions]
-    assert categories.count("Technical") == 5
+    assert categories.count("Gap-focused") == 5
+    assert categories.count("Technical") == 3
     assert categories.count("Project") == 2
     assert categories.count("Behavioral") == 1
 
@@ -107,10 +109,31 @@ def test_falls_back_when_ai_unavailable(monkeypatch):
     assert "Technical" in categories
     assert "Project" in categories
     assert categories.count("Behavioral") == 2
-    assert "Gap-focused" in categories
 
-    gap_focused = next(q for q in result.interview_questions if q.category == "Gap-focused")
-    assert gap_focused.based_on == "Docker"  # highest priority gap
+    # Both gaps get their own question, in priority order — not just the
+    # single highest-priority one — since the mock interview should
+    # primarily probe what the candidate doesn't yet show evidence of.
+    gap_focused = [q for q in result.interview_questions if q.category == "Gap-focused"]
+    assert [q.based_on for q in gap_focused] == ["Docker", "Kubernetes"]
+
+    # Gap-focused questions come first in the mix.
+    assert categories[0] == "Gap-focused"
+    assert categories[1] == "Gap-focused"
+
+
+def test_fallback_caps_gap_focused_questions_at_five(monkeypatch):
+    matches = [_match(f"Gap{i}", "GAP") for i in range(8)]
+
+    def raise_unavailable(**kwargs):
+        raise AIUnavailableError("simulated outage")
+
+    monkeypatch.setattr(insights_engine, "generate_structured", raise_unavailable)
+
+    result = generate_career_insights(matches, JDAnalysis())
+
+    gap_focused = [q for q in result.interview_questions if q.category == "Gap-focused"]
+    assert len(gap_focused) == 5
+    assert [q.based_on for q in gap_focused] == ["Gap0", "Gap1", "Gap2", "Gap3", "Gap4"]
 
 
 def test_fallback_never_raises_on_unexpected_provider_error(monkeypatch):

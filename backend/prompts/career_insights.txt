@@ -20,9 +20,17 @@ Using only the data below, produce:
    - "practice_project": one concrete project idea, relevant to the role
      title if given, that would let the candidate demonstrate this skill.
 
-2. "interview_questions": a mixed list covering these categories:
-   - "Technical": up to 5 questions, one per item in "matched_skills" (in
-     the given order, stop at 5 even if more are matched), each grounded
+2. "interview_questions": a mixed list covering these categories, weighted
+   toward the skills the candidate does NOT yet show evidence of — the
+   point of this mock interview is to probe the gaps, not to rehearse what
+   the resume already proves:
+   - "Gap-focused": up to 5 questions, one per item in "gap_skills" (in the
+     given priority order, stop at 5 even if more are gaps), each asking
+     whether the candidate has any related experience — even informal,
+     coursework, or self-taught — without assuming they don't and without
+     ever implying the resume already shows this skill.
+   - "Technical": up to 3 questions, one per item in "matched_skills" (in
+     the given order, stop at 3 even if more are matched), each grounded
      in that skill's evidence_text — ask the candidate to elaborate on
      the real thing they already described.
    - "Project": up to 2 questions, for matched skills whose evidence_type
@@ -30,9 +38,6 @@ Using only the data below, produce:
      project.
    - "Behavioral": exactly two general behavioral questions (learning
      something new quickly; a difficult technical problem solved).
-   - "Gap-focused": one question about the single highest-priority item in
-     "gap_skills" (if any), phrased as asking whether they have any
-     related experience, even informal, without assuming they don't.
    Every question except "Behavioral" ones must set "based_on" to the exact
    skill name it references; "Behavioral" questions must set it to null.
 

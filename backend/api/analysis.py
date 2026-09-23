@@ -93,11 +93,17 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
             "extracted and matching could not run."
         )
 
+    # Fast baseline only: skip the per-ambiguous-match AI refinement call so
+    # this request returns as soon as exact/raw-text/semantic matching is
+    # done. The frontend triggers POST /{analysis_id}/refine right after to
+    # upgrade PARTIAL matches in the background, without the loading screen
+    # waiting on a sequential AI round-trip per ambiguous match.
     matches, semantic_ok, ai_refinement_used = build_requirement_matches(
         jd_analysis,
         resume_analysis,
         resume.blocks,
         resume.sections,
+        use_ai_refinement=False,
     )
     if not semantic_ok:
         warnings.append(
@@ -117,6 +123,37 @@ def run_analysis(payload: AnalysisRunRequest, db: Session = Depends(get_db)):
         score=score.model_dump(mode="json"),
     )
     db.add(analysis)
+    db.commit()
+    db.refresh(analysis)
+
+    return _analysis_to_response(analysis, role_title=jd_analysis.role_title)
+
+
+@router.post("/{analysis_id}/refine", response_model=AnalysisResponse)
+def refine_analysis(analysis_id: int, db: Session = Depends(get_db)):
+    """Re-runs matching with AI refinement enabled for any PARTIAL match,
+    upgrading the fast baseline that /run produced. Meant to be called
+    right after /run, in the background, once the baseline is on screen."""
+    analysis = _get_analysis_or_404(analysis_id, db)
+    resume = _get_resume_or_404(analysis.resume_id, db)
+    job = _get_job_or_404(analysis.job_id, db)
+
+    resume_analysis = _ensure_resume_analyzed(resume, db)
+    jd_analysis = _ensure_job_analyzed(job, db)
+
+    matches, semantic_ok, ai_refinement_used = build_requirement_matches(
+        jd_analysis,
+        resume_analysis,
+        resume.blocks,
+        resume.sections,
+        use_ai_refinement=True,
+    )
+
+    analysis.matches = [m.model_dump(mode="json") for m in matches]
+    analysis.semantic_model_available = semantic_ok
+    analysis.ai_refinement_used = ai_refinement_used
+    analysis.score = compute_score(jd_analysis, resume_analysis, matches).model_dump(mode="json")
+    analysis.insights = None
     db.commit()
     db.refresh(analysis)
 

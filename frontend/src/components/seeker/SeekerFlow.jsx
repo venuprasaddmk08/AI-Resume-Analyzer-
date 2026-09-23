@@ -3,7 +3,7 @@ import UploadStep from "../UploadStep";
 import LoadingProgress from "../LoadingProgress";
 import ErrorState from "../ErrorState";
 import ResultsDashboard from "../ResultsDashboard";
-import { createJobDescriptionFromText, runAnalysis, uploadJobDescriptionFile, uploadResume } from "../../services/api";
+import { createJobDescriptionFromText, refineAnalysis, runAnalysis, uploadJobDescriptionFile, uploadResume } from "../../services/api";
 
 const STEPS = ["Uploading resume", "Submitting job description", "Matching skills & scoring"];
 
@@ -34,6 +34,18 @@ export default function SeekerFlow() {
 
       setAnalysis(analysisResult);
       setPhase("results");
+
+      // The baseline above is fast (no AI adjudication of ambiguous
+      // matches). Refine it in the background so the results page is
+      // already on screen while any PARTIAL matches get a second look.
+      refineAnalysis(analysisResult.analysis_id)
+        .then((refined) => {
+          setAnalysis((prev) => (prev && prev.analysis_id === refined.analysis_id ? refined : prev));
+        })
+        .catch(() => {
+          // Best-effort only — the baseline result already rendered and
+          // stands on its own if refinement fails.
+        });
     } catch (err) {
       setErrorMessage(err.message || "An unexpected error occurred.");
       setPhase("error");

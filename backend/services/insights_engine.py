@@ -49,20 +49,29 @@ def _with_youtube_link(step: LearningStep) -> LearningStep:
     return step
 
 
-_MAX_TECHNICAL_QUESTIONS = 5
+_MAX_GAP_QUESTIONS = 5
+_MAX_TECHNICAL_QUESTIONS = 3
 _MAX_PROJECT_QUESTIONS = 2
 
 
 def _cap_questions(questions: list[InterviewQuestion]) -> list[InterviewQuestion]:
-    """Enforces the spec's fixed interview mix (up to 5 technical, up to 2
-    project) even if the model didn't follow the prompt's counts exactly —
-    the prompt asks for this, but a numeric constraint from an LLM is a
-    request, not a guarantee, so it's also enforced here."""
+    """Enforces the spec's fixed interview mix (up to 5 gap-focused, up to 3
+    technical, up to 2 project) even if the model didn't follow the
+    prompt's counts exactly — the prompt asks for this, but a numeric
+    constraint from an LLM is a request, not a guarantee, so it's also
+    enforced here. The mix is deliberately weighted toward gap topics: the
+    point of a mock interview is to probe what the candidate doesn't yet
+    show evidence of, not to rehearse what the resume already proves."""
     capped = []
+    gap_count = 0
     technical_count = 0
     project_count = 0
     for q in questions:
-        if q.category == "Technical":
+        if q.category == "Gap-focused":
+            if gap_count >= _MAX_GAP_QUESTIONS:
+                continue
+            gap_count += 1
+        elif q.category == "Technical":
             if technical_count >= _MAX_TECHNICAL_QUESTIONS:
                 continue
             technical_count += 1
@@ -163,8 +172,24 @@ def _fallback_questions(
     role_title: str | None,
 ) -> list[InterviewQuestion]:
     role_text = f"the {role_title} role" if role_title else "this role"
+    role_text_capitalized = role_text[0].upper() + role_text[1:]
 
+    # Weighted toward gap topics first: the point of a mock interview is to
+    # probe what the candidate doesn't yet show evidence of, not mostly to
+    # rehearse what the resume already proves.
     questions = [
+        InterviewQuestion(
+            category="Gap-focused",
+            question=(
+                f"{role_text_capitalized} also asks for {m.canonical_skill}, which isn't clearly "
+                "shown in the resume. Is there any experience with it, even informally?"
+            ),
+            based_on=m.canonical_skill,
+        )
+        for m in gap_matches[:_MAX_GAP_QUESTIONS]
+    ]
+
+    questions += [
         InterviewQuestion(
             category="Technical",
             question=(
@@ -173,7 +198,7 @@ def _fallback_questions(
             ),
             based_on=m.canonical_skill,
         )
-        for m in matched_matches[:5]
+        for m in matched_matches[:_MAX_TECHNICAL_QUESTIONS]
     ]
 
     questions += [
@@ -187,22 +212,8 @@ def _fallback_questions(
         )
         for m in matched_matches
         if m.evidence and m.evidence[0].evidence_type == "PROJECT"
-    ][:2]
+    ][:_MAX_PROJECT_QUESTIONS]
 
     questions += [InterviewQuestion(category="Behavioral", question=q, based_on=None) for q in _BEHAVIORAL_QUESTIONS]
-
-    if gap_matches:
-        top_gap = gap_matches[0]
-        role_text_capitalized = role_text[0].upper() + role_text[1:]
-        questions.append(
-            InterviewQuestion(
-                category="Gap-focused",
-                question=(
-                    f"{role_text_capitalized} also asks for {top_gap.canonical_skill}, which isn't "
-                    "clearly shown in the resume. Is there any experience with it, even informally?"
-                ),
-                based_on=top_gap.canonical_skill,
-            )
-        )
 
     return questions

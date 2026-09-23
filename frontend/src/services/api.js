@@ -72,6 +72,15 @@ export async function runAnalysis(resumeId, jobId) {
   }
 }
 
+export async function refineAnalysis(analysisId) {
+  try {
+    const { data } = await client.post(`/api/analysis/${analysisId}/refine`);
+    return data;
+  } catch (error) {
+    throw new Error(extractErrorMessage(error, "Failed to refine analysis."));
+  }
+}
+
 export async function getAnalysisInsights(analysisId) {
   try {
     const { data } = await client.get(`/api/analysis/${analysisId}/insights`);

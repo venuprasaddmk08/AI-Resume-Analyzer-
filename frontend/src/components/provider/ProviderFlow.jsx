@@ -8,6 +8,7 @@ import {
   analyzeJobDescription,
   analyzeResumeStructured,
   createJobDescriptionFromText,
+  refineAnalysis,
   runAnalysis,
   uploadJobDescriptionFile,
   uploadResume,
@@ -78,6 +79,17 @@ export default function ProviderFlow() {
       setCandidates((prev) => [...prev, newCandidate]);
       setSelectedId(newCandidate.id);
       setPhase("fitness");
+
+      // Same fast-baseline-then-refine split as the job seeker flow: the
+      // candidate is already shown, so upgrade PARTIAL matches in the
+      // background instead of making this request wait on it.
+      refineAnalysis(analysis.analysis_id)
+        .then((refined) => {
+          setCandidates((prev) => prev.map((c) => (c.id === newCandidate.id ? { ...c, analysis: refined } : c)));
+        })
+        .catch(() => {
+          // Best-effort only — the baseline result already rendered.
+        });
     } catch (err) {
       setErrorMessage(err.message || "An unexpected error occurred.");
       setPhase("error");
