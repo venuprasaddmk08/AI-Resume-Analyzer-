@@ -111,30 +111,29 @@ def test_get_analysis_returns_404_for_unknown_id():
     assert response.status_code == 404
 
 
-def test_run_analyzes_resume_and_job_concurrently_when_both_uncached(monkeypatch):
-    """The resume and JD AI structured-analysis calls are independent, so
-    when neither has been analyzed yet (the common first-time-pair case),
-    they should run concurrently instead of one waiting on the other.
-    Uses a two-party barrier: both calls only complete once BOTH have
-    started, so if they ran sequentially this would time out instead of
-    the endpoint succeeding."""
-    import threading
+def test_run_analyzes_resume_and_job_sequentially_when_both_uncached(monkeypatch):
+    """The resume and JD AI structured-analysis calls used to run
+    concurrently, but low-RPM free-tier providers (e.g. Gemini) reliably
+    429/503 the second concurrent call, so they now run one after the
+    other. Asserts the job call only starts after the resume call has
+    fully returned."""
+    call_order = []
+
+    def sequential_analyze_resume(text):
+        call_order.append("resume_start")
+        call_order.append("resume_end")
+        return ResumeAnalysis(skills=[])
+
+    def sequential_analyze_job(text):
+        call_order.append("job_start")
+        call_order.append("job_end")
+        return JDAnalysis(required_skills=["Python"])
 
     resume_id = _upload_resume()
     job_id = _create_job()
 
-    barrier = threading.Barrier(2, timeout=2)
-
-    def slow_analyze_resume(text):
-        barrier.wait()
-        return ResumeAnalysis(skills=[])
-
-    def slow_analyze_job(text):
-        barrier.wait()
-        return JDAnalysis(required_skills=["Python"])
-
-    monkeypatch.setattr(analysis_api, "analyze_resume", slow_analyze_resume)
-    monkeypatch.setattr(analysis_api, "analyze_job_description", slow_analyze_job)
+    monkeypatch.setattr(analysis_api, "analyze_resume", sequential_analyze_resume)
+    monkeypatch.setattr(analysis_api, "analyze_job_description", sequential_analyze_job)
 
     import services.evidence_engine as evidence_engine
 
@@ -143,6 +142,7 @@ def test_run_analyzes_resume_and_job_concurrently_when_both_uncached(monkeypatch
     response = client.post("/api/analysis/run", json={"resume_id": resume_id, "job_id": job_id})
 
     assert response.status_code == 200
+    assert call_order == ["resume_start", "resume_end", "job_start", "job_end"]
 
 
 def test_run_calls_evidence_engine_with_ai_refinement_disabled(monkeypatch):
