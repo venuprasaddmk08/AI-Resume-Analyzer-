@@ -168,7 +168,7 @@ def test_transient_error_retries_then_succeeds(monkeypatch):
 
     assert result.value == "recovered"
     assert call_count["n"] == 2
-    assert sleep_calls == [1]
+    assert sleep_calls == [2]
 
 
 def test_transient_error_exhausts_retries_then_raises(monkeypatch):
@@ -189,8 +189,8 @@ def test_transient_error_exhausts_retries_then_raises(monkeypatch):
     with pytest.raises(AIUnavailableError):
         generate_structured(system_prompt="sys", user_prompt="user", schema=_DummySchema)
 
-    assert call_count["n"] == 3
-    assert sleep_calls == [1, 2]
+    assert call_count["n"] == 4
+    assert sleep_calls == [2, 5, 10]
 
 
 def test_unexpected_exception_does_not_crash_and_raises_ai_unavailable(monkeypatch):
