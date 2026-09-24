@@ -11,6 +11,17 @@ paraphrased) supporting quote from the resume in "evidence_text". If you
 cannot find real supporting text for a skill, do not include that skill at
 all — do not report a skill based on a mere keyword guess.
 
+Prefer the most specific supporting evidence available: if a skill is
+demonstrated in a work experience bullet, an internship bullet, or a
+project description (not just listed in a generic "Skills" line), use
+that bullet as "evidence_text" and set "evidence_type" to match where it
+came from: "WORK" for a work experience bullet, "INTERNSHIP" for an
+internship bullet, "PROJECT" for a project bullet, "EDUCATION" for a
+coursework/education line, "CERTIFICATION" for a certification, "COURSE"
+for a training/course line. Only use "OTHER" when the skill appears
+solely in a general skills list with no supporting experience, project,
+or education text elsewhere in the resume.
+
 Respond with a single JSON object that matches exactly this JSON Schema:
 {schema_json}
 
